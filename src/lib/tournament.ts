@@ -151,7 +151,7 @@ export interface TourRow {
   /** 计分方式与配置原文（详情页 tourMetric 解析用；列表行空串） */
   scoreMode: string;
   scoreConfig: string;
-  /** 纪录图表散点（详情页形态填充：按比赛设定总分排名前 30，score 秒；列表形态为空数组） */
+  /** 纪录图表散点（详情页形态填充：按比赛设定总分排名全部有成绩参赛者，score 秒；列表形态为空数组） */
   chartPoints: {
     rank: number;
     score: number;
@@ -295,13 +295,13 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
   });
 
   // 列表页图表数据（2026-11-19 张老师问「比赛列表为什么没显示图表」）：
-  // 当前页每场已开赛的比赛取排名前 30 散点（带我的名次标记数据），并行拉取
+  // 当前页每场已开赛的比赛取全部有成绩参赛者散点（带我的名次标记数据），并行拉取
   const total = rows.length;
   const totalPages = Math.max(1, Math.ceil(total / size));
   const p = Math.min(Math.max(page, 1), totalPages);
   const pageRows = rows.slice((p - 1) * size, p * size);
   const chartTargets = pageRows.filter((r) => r.status !== "upcoming");
-  const chartList = await Promise.all(chartTargets.map((r) => getTourRanking(Number(r.id), 30)));
+  const chartList = await Promise.all(chartTargets.map((r) => getTourRanking(Number(r.id), null)));
   const chartMap = new Map<string, { rank: number; score: number; name?: string; uid?: number; englishName?: string; sex?: number; title?: string; classic?: { name: string; color: string } | null }[]>();
   const bestMap = new Map<string, TourRow["bestLine"]>();
   chartTargets.forEach((r, i) => {
@@ -1213,7 +1213,8 @@ export interface TourRankRow {
  *  sum_topn：窗口内录像按 computePlayerScores 同口径算总分（不足 N 局补保底），
  *  videoId 取该玩家窗口内最好一局（按 metric/方向取「最好」）；target_diff 同口径取最小误差。
  *  排序：desc=true 越大越好（总分降序），否则升序。 */
-export async function getTourRanking(compId: number, limit = 10): Promise<TourRankRow[]> {
+/** limit=null 表示不截断（图表用全部有成绩参赛者）；数字仍按名次取前 N（右栏排行榜用 10）。 */
+export async function getTourRanking(compId: number, limit: number | null = 10): Promise<TourRankRow[]> {
   const comp = await prisma.tournament.findUnique({
     where: { id: BigInt(compId) },
     select: { startTime: true, endTime: true, scoreMode: true, scoreConfig: true, windowHours: true, includeLevels: true },
@@ -1298,10 +1299,11 @@ export async function getTourRanking(compId: number, limit = 10): Promise<TourRa
     const prev = bestBy.get(uid);
     if (!prev || (desc ? v > prev.time : v < prev.time)) bestBy.set(uid, { time: v, videoId: Number(r.id) });
   }
-  const sorted = [...scores.entries()]
-    .sort((a, b) => (desc ? b[1].score - a[1].score : a[1].score - b[1].score))
-    .slice(0, limit);
-  const uids = sorted.map(([uid]) => BigInt(uid));
+  const sorted = [...scores.entries()].sort((a, b) =>
+    desc ? b[1].score - a[1].score : a[1].score - b[1].score
+  );
+  const ranked = limit === null ? sorted : sorted.slice(0, limit);
+  const uids = ranked.map(([uid]) => BigInt(uid));
   const [users, scoreRows] = await Promise.all([
     prisma.user.findMany({
       where: { id: { in: uids } },
@@ -1326,7 +1328,7 @@ export async function getTourRanking(compId: number, limit = 10): Promise<TourRa
       )
     : [];
   const titleMap = new Map(users.map((u, i) => [Number(u.id), titlePairs[i]]));
-  return sorted.map(([uid, s], i) => ({
+  return ranked.map(([uid, s], i) => ({
     rank: i + 1,
     uid,
     name: userMap.get(uid)?.chineseName ?? `UID ${uid}`,
@@ -2276,11 +2278,11 @@ export async function getTournamentDetail(
       .filter((s): s is Level => (LEVELS as readonly string[]).includes(s)),
   );
   // 纪录图表数据（2026-11-18 晚张老师问「已结束为什么没数据」）：按比赛设定总分
-  // 排名的散点——复用 getTourRanking 全量口径，取前 30 名（score 秒）；无成绩比赛为空。
-  // 图表上方「最好成绩」行 = 第一名（总分口径）
+  // 排名的散点——复用 getTourRanking 全量口径，展示全部有成绩参赛者（score 秒）；
+  // 无成绩比赛为空。图表上方「最好成绩」行 = 第一名（总分口径）
   const rankRows =
     c.startTime <= now
-      ? await getTourRanking(id, 30)
+      ? await getTourRanking(id, null)
       : [];
   const chartPoints = rankRows.map((r) => ({
     rank: r.rank,
