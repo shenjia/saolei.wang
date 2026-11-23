@@ -392,6 +392,7 @@ const APIS: ApiDoc[] = [
       "englishName": "Zhang Shen Jia",
       "sex": 1,
       "area": "陕西",
+      "avatarUrl": "https://saolei.wang/images/player/1.jpg",
       "registeredAt": 1167758493,
       "banned": false,
       "scores": {
@@ -413,6 +414,7 @@ const APIS: ApiDoc[] = [
     notes: [
       "banned: true 的账号不带成绩（与站内「封禁不在榜」口径一致）",
       "*VideoId = 0 表示该列无关联录像；area 已做合规显示名处理（香港 → 中国香港）",
+      "avatarUrl 为头像完整 URL（新版上传 / OAuth 外链 / 旧站照片墙，无头像为 /images/player/no.jpg 默认图），与 me 接口同口径",
       "signatures 为该玩家自注册的录像签名归属（本站特有数据）",
     ],
   },
@@ -420,7 +422,7 @@ const APIS: ApiDoc[] = [
     path: "/api/public/v1/user_list",
     title: "玩家列表（轻量）",
     brief: "批量补齐玩家基础信息 + 8 列合计成绩",
-    desc: "批量补齐玩家基础信息的轻量版：字段同 user_info 但不含 scoresNf / signatures / 逐级录像指针（scores 为 8 列合计成绩）。",
+    desc: "批量补齐玩家基础信息的轻量版：字段同 user_info（含 avatarUrl）但不含 scoresNf / signatures / 逐级录像指针（scores 为 8 列合计成绩）。",
     params: [{ name: "id", required: true, desc: "逗号分隔的玩家 ID，最多 100 个" }],
     request: "GET /api/public/v1/user_list?id=1,2",
     response: `{
@@ -432,6 +434,7 @@ const APIS: ApiDoc[] = [
       "englishName": "Zhang Shen Jia",
       "sex": 1,
       "area": "陕西",
+      "avatarUrl": "https://saolei.wang/images/player/1.jpg",
       "registeredAt": 1167758493,
       "banned": false,
       "scores": {

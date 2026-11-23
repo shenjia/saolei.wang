@@ -194,7 +194,8 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
   "generatedAt": 1792555560,
   "users": [
     { "id": 1, "name": "张砷镓", "englishName": "Zhang Shen Jia", "sex": 1,
-      "area": "陕西", "registeredAt": 1167758493, "banned": false,
+      "area": "陕西", "avatarUrl": "https://saolei.wang/images/player/1.jpg",
+      "registeredAt": 1167758493, "banned": false,
       "scores": {
         "beg": { "time": 980, "timeVideoId": 12345, "3bvs": 7289, "3bvsVideoId": 23456 },
         "int": { "time": 10310, "timeVideoId": 12346, "3bvs": 5301, "3bvsVideoId": 23457 },
@@ -207,11 +208,11 @@ metrics 字段：`cl` 总点击（左+右+双）· `clLeft`/`clRight`/`clDouble`
 }
 ```
 
-说明：`banned: true` 的账号不带成绩（与站内「封禁不在榜」口径一致）；`*VideoId` = 0 表示该列无关联录像；`area` 已做合规显示名处理（香港 → 中国香港）。
+说明：`banned: true` 的账号不带成绩（与站内「封禁不在榜」口径一致）；`*VideoId` = 0 表示该列无关联录像；`area` 已做合规显示名处理（香港 → 中国香港）；`avatarUrl` = 头像完整 URL（新版上传 / OAuth 外链 / 旧站照片墙，无头像为 `/images/player/no.jpg` 默认图），与 `/api/public/v1/me` 同口径。
 
 ### 5. 玩家列表（轻量）`GET /api/public/v1/user_list?id=1,2,3`
 
-`id` = 逗号分隔的玩家 ID，最多 100 个。字段同 user_info 但不含 scoresNf / signatures / 逐级录像指针（`scores` 为 8 列合计成绩），适合批量补齐姓名等基础信息的场景。
+`id` = 逗号分隔的玩家 ID，最多 100 个。字段同 user_info（含 `avatarUrl`）但不含 scoresNf / signatures / 逐级录像指针（`scores` 为 8 列合计成绩），适合批量补齐姓名等基础信息的场景。
 
 ### 6. 帖子查询 `GET /api/public/v1/post_info?id=1,2,3`
 

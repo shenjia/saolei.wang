@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { requirePartnerEx, unauthorized, rateLimited, partnerRateLimit } from "@/lib/partner";
 import { prisma } from "@/lib/db";
 import { areaDisplay } from "@/lib/config";
+import { resolveAvatarUrl, DEFAULT_AVATAR } from "@/lib/avatar";
 
 export async function GET(req: Request) {
   const partner = await requirePartnerEx(req);
@@ -32,18 +33,26 @@ export async function GET(req: Request) {
     prisma.userScores.findMany({ where: { id: { in: ids.map(BigInt) } } }),
   ]);
   const scoreMap = new Map(scores.map((s) => [Number(s.id), s]));
+  // 头像口径与 me / user_info 完全一致：上传 / OAuth 外链原样，旧站 "1" 走照片墙，
+  // 其余统一默认图 no.jpg；相对路径拼完整域名（SITE_URL 优先）。
+  const base = process.env.SITE_URL ?? new URL(req.url).origin;
 
   return NextResponse.json({
     generatedAt: Math.floor(Date.now() / 1000),
     users: users.map((u) => {
       const s = scoreMap.get(Number(u.id));
       const banned = u.status !== 0;
+      const rawAvatar = resolveAvatarUrl(
+        u.avatar,
+        u.avatar === "1" ? `/images/player/${Number(u.id)}.jpg` : DEFAULT_AVATAR
+      );
       return {
         id: Number(u.id),
         name: u.chineseName,
         englishName: u.englishName,
         sex: u.sex,
         area: areaDisplay(u.area),
+        avatarUrl: /^https?:\/\//.test(rawAvatar) ? rawAvatar : `${base}${rawAvatar}`,
         registeredAt: Number(u.createTime),
         banned,
         ...(banned ? {} : {

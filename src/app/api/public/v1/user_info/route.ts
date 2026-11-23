@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requirePartnerEx, unauthorized, rateLimited, partnerRateLimit } from "@/lib/partner";
 import { areaDisplay } from "@/lib/config";
+import { resolveAvatarUrl, DEFAULT_AVATAR } from "@/lib/avatar";
 
 export async function GET(req: Request) {
   const partner = await requirePartnerEx(req);
@@ -56,16 +57,26 @@ export async function GET(req: Request) {
         }
       : null;
 
+  // 头像完整 URL：与 me 接口同款解析（新版上传 /uploads/avatar/… 与 OAuth 外链
+  // 原样；旧站标记位 "1" → 照片墙 /images/player/{id}.jpg；其余统一默认图 no.jpg）。
+  // 相对路径拼完整域名（SITE_URL 优先，未配退请求 origin），调用方拿到即可直接展示。
+  const base = process.env.SITE_URL ?? new URL(req.url).origin;
+
   return NextResponse.json({
     generatedAt: Math.floor(Date.now() / 1000),
     users: users.map((u) => {
       const banned = u.status !== 0;
+      const rawAvatar = resolveAvatarUrl(
+        u.avatar,
+        u.avatar === "1" ? `/images/player/${Number(u.id)}.jpg` : DEFAULT_AVATAR
+      );
       return {
         id: Number(u.id),
         name: u.chineseName,
         englishName: u.englishName,
         sex: u.sex,
         area: areaDisplay(u.area),
+        avatarUrl: /^https?:\/\//.test(rawAvatar) ? rawAvatar : `${base}${rawAvatar}`,
         registeredAt: Number(u.createTime),
         banned,
         ...(banned
