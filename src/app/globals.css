@@ -18013,6 +18013,9 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_ev_official { color: #fdc61a; font-weight: 700; }
 /* 窗口赛完赛事件（type=6「已完赛」2026-11-22）：同官方事件金色 */
 .comp_ev_finished { color: #fdc61a; font-weight: 700; }
+/* 弃赛事件（type=6 无任何参赛录像，2026-11-23 张老师定）：暗灰弱化（同成绩动作
+   文本 #939387），不加粗——与金色「已完赛」拉开语义层级 */
+.comp_ev_abandoned { color: #939387; }
 /* 完赛事件「最终成绩」标签（type=6，2026-11-22 张老师定）：暗灰弱化、数值亮灰加粗 */
 .comp_ev_finish_label { color: #939387; margin-left: 4px; }
 /* 完赛事件附带的最终成绩数值：亮灰加粗（同 .comp_ev_total 口径）。

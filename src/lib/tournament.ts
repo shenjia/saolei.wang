@@ -808,6 +808,9 @@ export interface TourEventRow {
    *  与排行榜前10同款）——type=4/6 行带（computePlayerScores.calc 原样透传，
    *  本来就算出只是此前丢弃，服务端零新增计算）；null=不挂气泡 */
   calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[] | null;
+  /** type=6 完赛行：窗口到点但没有任何有效录像=弃赛（2026-11-23 张老师定：
+   *  动态显示暗灰「已弃赛」而非金色「已完赛」）；其余类型恒 false */
+  abandoned: boolean;
 }
 
 /** 比赛动态分页（2026-11-18 深夜张老师四轮定版）：
@@ -1054,21 +1057,27 @@ export async function getTourEventsPage(
   const finishSessByUser = new Map(finishSessions.map((s) => [Number(s.userId), s]));
   // 完赛行成绩+计算过程（2026-11-22 动态气泡）：一次 computeWindowScore 同时拿两样，
   // 按 uid 缓存避免同玩家多行重复查询
-  const finishWinCache = new Map<number, { score: number | null; calc: PlayerScore["calc"] | null }>();
-  const finishWinFor = async (uid: number): Promise<{ score: number | null; calc: PlayerScore["calc"] | null }> => {
-    if (!finishSessByUser.has(uid)) return { score: null, calc: null };
+  const finishWinCache = new Map<
+    number,
+    { score: number | null; calc: PlayerScore["calc"] | null; abandoned: boolean }
+  >();
+  const finishWinFor = async (
+    uid: number
+  ): Promise<{ score: number | null; calc: PlayerScore["calc"] | null; abandoned: boolean }> => {
     if (finishWinCache.has(uid)) return finishWinCache.get(uid)!;
-    const s = finishSessByUser.get(uid)!;
+    const s = finishSessByUser.get(uid);
     const wv = await prisma.video.findMany({
       where: {
         tournamentId: cid,
         user: BigInt(uid),
         status: { not: 0 },
-        createTime: { gte: s.startTime, lte: s.endTime },
+        // 窗口赛按个人会话窗；统一计时赛（历届金羊杯等无会话表）按本比赛全部挂接录像
+        // ——弃赛判据只看「有没有参赛录像」，与是否有成绩（保底补足）无关
+        createTime: s ? { gte: s.startTime, lte: s.endTime } : undefined,
       },
       select: { id: true, level: true },
     });
-    const win = wv.length
+    const win = s && wv.length
       ? await computeWindowScore(
           cid,
           BigInt(uid),
@@ -1076,8 +1085,9 @@ export async function getTourEventsPage(
           { scoreMode: compRow?.scoreMode, scoreConfig: compRow?.scoreConfig, includeLevels: compRow?.includeLevels },
         )
       : { score: null, calc: null };
-    finishWinCache.set(uid, win);
-    return win;
+    const out = { score: win.score, calc: win.calc, abandoned: wv.length === 0 };
+    finishWinCache.set(uid, out);
+    return out;
   };
   type Row = {
     sortKey: number;
@@ -1090,6 +1100,7 @@ export async function getTourEventsPage(
     batchBest: number | null;
     prevTotal: number | null;
     calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[] | null;
+    abandoned: boolean;
   };
   const rows: Row[] = [];
   // 成绩合并行 + 提升幅度（与该玩家上一批的总成绩比）
@@ -1123,10 +1134,13 @@ export async function getTourEventsPage(
       batchBest: prog.batchBest,
       prevTotal: prev === undefined ? null : prev,
       calc: prog.calc,
+      abandoned: false,
     });
     lastTotalBy.set(m.userId, prog.total);
   }
   for (const o of otherRows) {
+    // type=6 完赛行一次算出三样（最终成绩/气泡明细/是否弃赛），避免重复查询
+    const fw = o.type === TOUR_EVENT_FINISHED ? await finishWinFor(o.userId) : null;
     rows.push({
       sortKey: o.type === TOUR_EVENT_STARTED ? type3At : o.type === TOUR_EVENT_ENDED ? type5At : o.createTime,
       type: o.type,
@@ -1137,12 +1151,13 @@ export async function getTourEventsPage(
       // type=6 完赛事件带最终成绩（窗口总分，补写时按会话窗口现算落 details？
       // ——不落库，此处按「该玩家截至窗口结束」总分现算：与成绩进度同池不同窗，
       // 完赛动态成绩=个人窗口内总分（排行榜同源），见 computeWindowScore 同口径
-      total: o.type === TOUR_EVENT_FINISHED ? (await finishWinFor(o.userId)).score : null,
+      total: fw?.score ?? null,
       batchBest: null,
       prevTotal: null,
       // 完赛行也挂计算过程气泡（2026-11-22 张老师需求「包括最终成绩数字」）：
       // computeWindowScore 内部本就产出 calc，同次计算透传（无成绩/未参赛=null 不挂）
-      calc: o.type === TOUR_EVENT_FINISHED ? (await finishWinFor(o.userId)).calc : null,
+      calc: fw?.calc ?? null,
+      abandoned: fw?.abandoned ?? false,
     });
   }
   rows.sort((a, b) => {
@@ -1205,6 +1220,7 @@ export async function getTourEventsPage(
         batchBestMs: r.batchBest,
         prevTotalMs: r.prevTotal,
         calc: r.calc,
+        abandoned: r.abandoned,
       };
     }),
     total,

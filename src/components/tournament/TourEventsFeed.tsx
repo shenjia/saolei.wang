@@ -190,11 +190,18 @@ export function TourEventsFeed({
                     <b className="comp_ev_official">{compEventText(e.type)}</b>
                   ) : e.type === 6 ? (
                     /* 窗口赛完赛事件（2026-11-22 张老师定）：「已完赛」金色（同官方事件）；
+                       2026-11-23 张老师定：窗口到点但没有任何参赛录像的玩家＝弃赛，
+                       动态文本改暗灰「已弃赛」（服务端 abandoned 判据：个人窗口内/统一
+                       计时赛本比赛内有无 status<>0 的挂接录像，与有无保底成绩无关）；
                        「最终成绩」标签+成绩数字拆到行右独立列（2026-11-22 气泡改造，
                        见下方 comp_ev_score 注释——原省略号容器会裁掉气泡）；
                        无有效成绩（totalMs=null）标签与数字一并不出（同原口径） */
                     <>
-                      <b className="comp_ev_finished">{compEventText(e.type)}</b>
+                      {e.abandoned ? (
+                        <b className="comp_ev_abandoned">已弃赛</b>
+                      ) : (
+                        <b className="comp_ev_finished">{compEventText(e.type)}</b>
+                      )}
                       {e.totalMs !== null && <span className="comp_ev_finish_label">最终成绩</span>}
                     </>
                   ) : e.type === 4 ? (
