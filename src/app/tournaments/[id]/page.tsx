@@ -42,7 +42,9 @@ import {
   getTourVideosPage,
   getTournamentDetail,
   parseScoreConfig,
+  parseTourEventsFilter,
   resolveTourIdParam,
+  type TourEventsFilter,
 } from "@/lib/tournament";
 
 export const dynamic = "force-dynamic";
@@ -98,6 +100,13 @@ export default async function CompetitionDetailPage({
 
   const ep = Math.max(parseInt(sp.ep ?? "1", 10) || 1, 1);
   const vp = Math.max(parseInt(sp.page ?? "1", 10) || 1, 1);
+  // 动态筛选（2026-11-23 张老师需求）：ef=finished 只看完赛、ef=follow 只看我关注的人，
+  // 缺省/非法值回全部；与页码 ep 同为 URL 状态，两板块跳转互带。
+  const eventsFilter: TourEventsFilter = parseTourEventsFilter(sp.ef);
+  // 两板块共用的 URL 基底：完整带上当前所有参数（含对方页码与动态筛选），
+  // 换页/切筛选时由各客户端壳覆盖自己管辖的键（动态壳覆盖 ep/ef，录像搜索覆盖 page
+  // 与 vauthor/vtime/3bv），避免任一路径把其他维度冲掉。
+  const otherParams: Record<string, string | undefined> = { ...sp };
   // 录像区搜索（2026-11-18 深夜张老师定：同录像页，限本比赛范围内）——
   // author（玩家 id）与 time（成绩秒）互斥；vtime 输入格式同 /video（如 16.6）
   const vAuthor = Math.max(parseInt(sp.vauthor ?? "", 10) || 0, 0) || undefined;
@@ -121,7 +130,10 @@ export default async function CompetitionDetailPage({
     (VIDEO_LEVELS as readonly string[]).includes(l)
   );
   const [events, videos, ranking, dstats, myResult, searchUser] = await Promise.all([
-    getTourEventsPage(compId, ep, TOUR_EVENT_PAGE_SIZE),
+    getTourEventsPage(compId, ep, TOUR_EVENT_PAGE_SIZE, {
+      filter: eventsFilter,
+      viewerId: session?.uid,
+    }),
     getTourVideosPage(compId, vp, COMP_VIDEO_PAGE_SIZE, {
       author: vAuthor,
       time: vTime,
@@ -172,9 +184,8 @@ export default async function CompetitionDetailPage({
               key=ep：软导航换页时强制重挂载换入服务端新数据（铁律「客户端 Feed 软导航
               initial 不重置」，同 VideoListFeed key=author-time 判例） */}
           <div className="box comp_section">
-            <h2>动态</h2>
             <TourEventsFeed
-              key={`ep${ep}-vp${vp}`}
+              key={`ep${ep}-vp${vp}-ef${eventsFilter}`}
               compId={compId}
               scoreMetric={tourMetric}
               scoreDesc={tourDesc}
@@ -184,6 +195,9 @@ export default async function CompetitionDetailPage({
               initialTotalPages={Math.max(1, Math.ceil(events.total / TOUR_EVENT_PAGE_SIZE))}
               videosPage={vp}
               pageSize={TOUR_EVENT_PAGE_SIZE}
+              filter={eventsFilter}
+              loggedIn={!!session}
+              otherParams={otherParams}
             />
           </div>
 
@@ -194,14 +208,16 @@ export default async function CompetitionDetailPage({
               key=page+筛选/排序：软导航改变筛选维度时强制重挂载换入服务端新数据（铁律） */}
           <div className="box comp_section">
             <TourVideosFeed
-              key={`vp${vp}-ep${ep}-va${vAuthor ?? 0}-vt${vTimeRaw}-vb${vBv ?? ""}-lv${videoLevel}-od${videoOrder}-dr${videoDir}`}
+              key={`vp${vp}-ep${ep}-ef${eventsFilter}-va${vAuthor ?? 0}-vt${vTimeRaw}-vb${vBv ?? ""}-lv${videoLevel}-od${videoOrder}-dr${videoDir}`}
               compId={compId}
               initialVideos={videos.videos}
               initialPage={videos.page}
               initialTotal={videos.total}
               initialTotalPages={Math.max(1, Math.ceil(videos.total / COMP_VIDEO_PAGE_SIZE))}
               eventsPage={events.page}
+              eventsFilter={eventsFilter}
               pageSize={COMP_VIDEO_PAGE_SIZE}
+              preserveParams={otherParams}
               tourMetric={tourMetric}
               levels={tourVideoLevels}
               level={videoLevel}

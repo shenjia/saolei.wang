@@ -475,6 +475,13 @@ export const TOUR_EVENT_SCORE = 4; // 玩家更新成绩
 export const TOUR_EVENT_ENDED = 5; // 比赛正式结束
 export const TOUR_EVENT_FINISHED = 6; // 玩家完赛（窗口赛个人窗口结束，2026-11-22 张老师定）
 
+/** 比赛动态筛选（2026-11-23 张老师需求）：全部 / 完赛（只看 type=6）/ 关注（只看我关注的人的参赛动态） */
+export type TourEventsFilter = "all" | "finished" | "follow";
+
+export function parseTourEventsFilter(raw?: string | null): TourEventsFilter {
+  return raw === "finished" || raw === "follow" ? raw : "all";
+}
+
 /** 动态事件文案（type → 展示文本；主体玩家名由行渲染拼接）。
     详情页 RSC 与 TourEventsFeed 客户端壳共用（2026-11-13 五轮翻页改版）。
     2026-11-19 张老师定：type=1 报名开始动态废弃（存量不再展示——渲染端过滤，
@@ -814,14 +821,36 @@ export interface TourEventRow {
 export async function getTourEventsPage(
   tournamentId: number,
   page: number,
-  pageSize = 20
+  pageSize = 20,
+  /** 2026-11-23 张老师需求：动态筛选；viewerId 仅 follow 用，服务端从 session 取 */
+  options: { filter?: TourEventsFilter; viewerId?: number } = {}
 ): Promise<{ rows: TourEventRow[]; total: number; page: number; pageSize: number }> {
   const cid = BigInt(tournamentId);
+  const filter = options.filter ?? "all";
+  // 关注筛选：先取我关注的人（未登录/无关注即空集，查询直接返回空，不回退全部）。
+  let followeeIds: number[] = [];
+  if (filter === "follow" && options.viewerId) {
+    const fs = await prisma.userFollow.findMany({
+      where: { follower: BigInt(options.viewerId) },
+      select: { followee: true },
+    });
+    followeeIds = fs.map((r) => Number(r.followee));
+  }
+  // 筛选在查询层生效（不是切片后再前端过滤）：total / 分页都按筛选后的结果算，
+  // 完赛只看 type=6；关注只看关注对象的参赛动态（官方事件主体 user_id=0 自然排除）。
+  const eventWhere: {
+    tournamentId: bigint;
+    type: number | { not: number };
+    userId?: { in: bigint[] };
+  } = filter === "finished"
+    ? { tournamentId: cid, type: TOUR_EVENT_FINISHED }
+    : { tournamentId: cid, type: { not: TOUR_EVENT_JOIN_OPEN } };
+  if (filter === "follow") eventWhere.userId = { in: followeeIds.map((uid) => BigInt(uid)) };
   // 全量取出本比赛动态（比赛量级十场、单场动态几千条，内存归并最直白；
   // 跨批合并/总成绩进度都无法在 SQL 一层表达）。
   // 2026-11-19 张老师定：type=1 报名开始动态废弃——查询层直接排除（每场一条无信息量）
   const all = await prisma.tournamentEvent.findMany({
-    where: { tournamentId: cid, type: { not: TOUR_EVENT_JOIN_OPEN } },
+    where: eventWhere,
     orderBy: [{ createTime: "asc" }, { id: "asc" }],
   });
   const scoreEv = all.filter((e) => e.type === TOUR_EVENT_SCORE);

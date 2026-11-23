@@ -21,6 +21,7 @@ import { VIDEO_LIST_DEFAULT_DIR, type VideoLevel, type VideoListOrder, type Vide
 import type { VideoListItem } from "@/lib/queries";
 import type { TourMetricKey } from "@/lib/tour-metric";
 import { replaceWithoutJump } from "@/components/useNoJump";
+import type { TourEventsFilter } from "@/lib/tournament";
 /** 级别筛选 tabs（动态组装：全部 + 比赛收录级别，仅开放级别有 tab） */
 const LEVEL_LABELS: Record<VideoLevel, string> = { beg: "初级", int: "中级", exp: "高级" };
 
@@ -32,6 +33,8 @@ export function TourVideosFeed({
   initialTotalPages,
   /** 动态板块当前页码（URL ?ep=，换录像页时带上不丢对方状态） */
   eventsPage,
+  /** 动态筛选（URL ?ef=，2026-11-23）：录像区换页/切级别/排序/搜索都不能丢 */
+  eventsFilter,
   pageSize,
   /** 比赛计分项（2026-11-22 张老师需求）：非 time/3bv/s/stnb 时录像表 3BV/s+STNB
    *  两列替换为一列计分项（惜步杯=Crossings）；缺省=time 行为不变 */
@@ -48,6 +51,7 @@ export function TourVideosFeed({
   vBv,
   /** 搜索框回显（标题行搬进壳后 VideoSearch 由本组件直接渲染——同为 client 组件无 RSC 边界） */
   searchAuthorName,
+  preserveParams,
 }: {
   compId: number;
   initialVideos: VideoListItem[];
@@ -55,6 +59,7 @@ export function TourVideosFeed({
   initialTotal: number;
   initialTotalPages: number;
   eventsPage: number;
+  eventsFilter: TourEventsFilter;
   pageSize: number;
   tourMetric?: TourMetricKey;
   /** 比赛收录级别（2026-11-22 张老师需求）：tabs 只渲染这些级别（已钳到初/中/高） */
@@ -71,6 +76,9 @@ export function TourVideosFeed({
   vBv?: number;
   /** 搜索框作者筛选回显姓名（空串=无筛选） */
   searchAuthorName?: string;
+  /** 页面其余 URL 参数（含 ep/ef/level/order/dir 等）：交给搜索框跳转时原样带住，
+   *  否则比赛页搜索会只留 vauthor/vtime/3bv，把动态页码/筛选与录像级别排序冲掉 */
+  preserveParams?: Record<string, string | undefined>;
 }) {
   const router = useRouter();
   // 软导航沿用当前真实 pathname（2026-11-22 张老师报「第一次翻页跳动」根因修复，
@@ -98,6 +106,8 @@ export function TourVideosFeed({
     const params: Record<string, string | undefined> = {};
     if (extra.page && extra.page > 1) params.page = String(extra.page);
     if (eventsPage > 1) params.ep = String(eventsPage);
+    // 动态筛选（2026-11-23）透传：录像侧任何换页/切级别/排序都不把动态筛选冲掉
+    if (eventsFilter !== "all") params.ef = eventsFilter;
     const levelVal = (extra.level ?? level) !== "all" ? (extra.level ?? level) : undefined;
     if (levelVal) params.level = levelVal;
     const orderVal = orderNow !== "id" ? orderNow : undefined;
@@ -212,6 +222,7 @@ export function TourVideosFeed({
             authorName={searchAuthorName ?? ""}
             time={vTime}
             bv={vBv != null ? String(vBv) : undefined}
+            preserveParams={preserveParams}
           />
         </div>
       </div>
@@ -230,6 +241,7 @@ export function TourVideosFeed({
               base: pathname,
               params: {
                 ...(eventsPage > 1 ? { ep: String(eventsPage) } : {}),
+                ...(eventsFilter !== "all" ? { ef: eventsFilter } : {}),
                 ...(level !== "all" ? { level } : {}),
                 // 搜索态透传（修饰键/中键走真实链接的兜底路径也不能丢筛选）
                 ...(vAuthor ? { vauthor: String(vAuthor) } : {}),

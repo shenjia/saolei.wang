@@ -67,6 +67,7 @@ export function VideoSearch({
   scope,
   tourId,
   userId,
+  preserveParams,
 }: {
   level: string;
   /** 当前排序（跳转时保留；默认排序 id 不进 URL） */
@@ -92,6 +93,9 @@ export function VideoSearch({
   tourId?: number;
   /** scope=user：主页用户 id（跳转 /user/{id}）与显示名（清除搜索回显） */
   userId?: number;
+  /** scope=tour：页面其余 URL 参数（ep/ef/level/order/dir 等）透传——
+   *  2026-11-23 比赛页动态筛选上线后，搜索不能只留 vauthor/vtime/3bv 把其他筛选冲掉 */
+  preserveParams?: Record<string, string | undefined>;
 }) {
   const router = useRouter();
   // 比赛范围模式跳回本详情页用当前 pathname（2026-11-22：代号 URL 进入后搜索，
@@ -236,6 +240,7 @@ export function VideoSearch({
       // push /tournaments/<id> 会让 pathname 变化 → ScrollReset 滚顶
       router.push(
         buildUrl(pathname, {
+          ...preserveParams,
           vauthor: params.author,
           vtime: params.time,
           "3bv": params.bv,

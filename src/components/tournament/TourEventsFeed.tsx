@@ -18,7 +18,7 @@ import { RelTime } from "@/components/RelTime";
 import { AvatarCell } from "@/components/Cells";
 import { TitleBadge } from "@/components/TitleBadge";
 import { DeltaArrow } from "@/components/RankingRows";
-import { compEventText, type TourEventRow } from "@/lib/tournament";
+import { compEventText, type TourEventRow, type TourEventsFilter } from "@/lib/tournament";
 import { fmtTourScore, type TourMetricKey } from "@/lib/tour-metric";
 import { TourCalcTip } from "@/components/tournament/TourCalcTip";
 import { replaceWithoutJump } from "@/components/useNoJump";
@@ -35,6 +35,12 @@ export function TourEventsFeed({
   /** 计分数据项与方向（2026-11-21 多数据项：成绩格式化 + 提升箭头方向） */
   scoreMetric,
   scoreDesc,
+  /** 动态筛选（2026-11-23 张老师需求）：URL ?ef=，服务端已按此过滤 */
+  filter,
+  loggedIn,
+  /** 其余 URL 参数（录像页码/搜索/级别/排序等）：动态翻页与切筛选时原样带住，
+   *  避免「选了录像筛选再翻动态页就丢筛选」——与录像侧 tourParts 同口径 */
+  otherParams,
 }: {
   compId: number;
   initialRows: TourEventRow[];
@@ -45,6 +51,9 @@ export function TourEventsFeed({
   pageSize: number;
   scoreMetric: TourMetricKey;
   scoreDesc: boolean;
+  filter: TourEventsFilter;
+  loggedIn: boolean;
+  otherParams: Record<string, string | undefined>;
 }) {
   const router = useRouter();
   // 翻页沿用当前真实 pathname（2026-11-22 张老师报「第一次翻页跳动」）：
@@ -62,12 +71,36 @@ export function TourEventsFeed({
 
   const hasMore = rows.length < total;
 
+  /** 动态板块跳转 URL（换页/切筛选共用）：基底带住录像区筛选与页码，
+   *  ep/ef 由本板块接管；切筛选一律 p=1（否则筛选后条数变少会停在空白页）。
+   *  base 一律 usePathname()——代号 URL 进入后不能把 pathname 改成数字 id（跳动铁律）。 */
+  function eventsUrl(extra: { p?: number; filter?: TourEventsFilter }): string {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(otherParams)) {
+      if (v !== undefined && v !== "") params.set(k, v);
+    }
+    if (videosPage > 1) params.set("page", String(videosPage));
+    else params.delete("page");
+    const p = extra.p ?? 1;
+    if (p > 1) params.set("ep", String(p));
+    else params.delete("ep");
+    const f = extra.filter ?? filter;
+    if (f !== "all") params.set("ef", f);
+    else params.delete("ef");
+    const qs = params.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  }
+
   async function loadMore() {
     if (loading || !hasMore) return;
     setLoading(true);
     try {
       const size = rows.length + nextBatchSize(step, pageSize);
-      const res = await fetch(`/api/tournament/${compId}/events?page=1&size=${size}`, {
+      // 加载更多必须带筛选态（否则前缀被「全部」数据替换，等于静默取消筛选）；
+      // 关注的人由 API 从 session 取，客户端不传 uid。
+      const params = new URLSearchParams({ page: "1", size: String(size) });
+      if (filter !== "all") params.set("ef", filter);
+      const res = await fetch(`/api/tournament/${compId}/events?${params.toString()}`, {
         cache: "no-store",
       });
       if (res.ok) {
@@ -90,15 +123,46 @@ export function TourEventsFeed({
       // 保持滚动位置（张老师 2026-11-19 凌晨定「原地不动」）：
       // scroll:false 拦 Next 滚顶 + ScrollReset 已修同页参数变化不滚顶；
       // 不做主动锚定——板块在视口内时原地替换即可（浏览器 scroll anchoring 保持视觉位置）
-      router.push(
-        `${pathname}?page=${videosPage}${p > 1 ? `&ep=${p}` : ""}`,
-        { scroll: false }
-      );
+      router.push(eventsUrl({ p }), { scroll: false });
     });
   }
 
+  const filterTabs: [TourEventsFilter, string][] = [
+    ["all", "全部"],
+    ["finished", "完赛"],
+    ["follow", "关注"],
+  ];
+
   return (
     <>
+      {/* 标题行与录像板块同构：h2 + tabs（comp_sec_head 底线对齐），
+          tabs 走软导航换服务端数据；修饰键/中键保留真实 href 兜底 */}
+      <div className="comp_sec_head">
+        <h2>动态</h2>
+        <div className="news_tabs ranking_tabs">
+          {filterTabs.map(([value, label]) =>
+            value === filter ? (
+              <span key={value} className="current">
+                {label}
+              </span>
+            ) : (
+              <a
+                key={value}
+                href={eventsUrl({ p: 1, filter: value })}
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                  e.preventDefault();
+                  startTransition(() => {
+                    router.push(eventsUrl({ p: 1, filter: value }), { scroll: false });
+                  });
+                }}
+              >
+                {label}
+              </a>
+            )
+          )}
+        </div>
+      </div>
       {rows.length > 0 ? (
         <ul className="comp_events" ref={listRef}>
           {rows.map((e) => (
@@ -195,7 +259,15 @@ export function TourEventsFeed({
           ))}
         </ul>
       ) : (
-        <div className="comp_section_empty">暂无动态</div>
+        <div className="comp_section_empty">
+          {filter === "follow" && !loggedIn
+            ? "请先登录后再查看关注动态"
+            : filter === "finished"
+              ? "暂无完赛动态"
+              : filter === "follow"
+                ? "暂无关注动态"
+                : "暂无动态"}
+        </div>
       )}
       <div className="list_footer">
         <PageSlider
