@@ -1046,7 +1046,10 @@ export async function getTourEventsPage(
     }));
   const type3At = compRow ? Number(compRow.startTime) : 0;
   const type5At = compRow ? Number(compRow.endTime) : 0;
-  // type=6 完赛行的最终成绩（窗口总分）：按个人会话窗现算（computeWindowScore 同口径）。
+  // type=6 完赛行的最终成绩：按该玩家参赛录像现算（computeWindowScore 同排行榜口径）。
+  // 窗口赛的 wv 已按个人会话窗过滤；统一计时赛（历届金羊杯，无会话记录）wv 即全部
+  // 挂接录像——两种赛制都能直接算分。2026-11-24 修复：此前以「有个人会话」为算分
+  // 前提，金羊杯等统一计时赛 s=null 被直接判 null，完赛动态只剩「已完赛」无成绩。
   // 会话表一次带出按 uid 索引；仅完赛行触发逐人计算（十量级，可忽略）
   const finishSessions = compRow?.windowHours
     ? await prisma.tournamentWindowSession.findMany({
@@ -1077,7 +1080,7 @@ export async function getTourEventsPage(
       },
       select: { id: true, level: true },
     });
-    const win = s && wv.length
+    const win = wv.length
       ? await computeWindowScore(
           cid,
           BigInt(uid),
