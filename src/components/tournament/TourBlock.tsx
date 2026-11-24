@@ -70,9 +70,16 @@ export function TourBlock({
       <div className="comp_head">
         <div className="comp_title_group">
           {/* 标题颜色（2026-11-19 张老师定）：详情页恒金色；列表页已结束亮灰、
-              其余金色。链接优先比赛代号（2026-11-19：/tournaments/<alias> 避免裸 id） */}
+              其余金色。链接优先比赛代号（2026-11-19：/tournaments/<alias> 避免裸 id）；
+              2026-11-24 张老师定：列表页标题新标签页打开详情（prefetch={false} 同全站
+              target=_blank 禁令），详情页顶部标题是自身链接、不新开 */}
           <h3 className={"comp_name" + (detail || c.status !== "ended" ? " on" : "")}>
-            <Link className="comp_name_link" href={`/tournaments/${c.alias || c.id}`}>
+            <Link
+              className="comp_name_link"
+              href={`/tournaments/${c.alias || c.id}`}
+              target={detail ? undefined : "_blank"}
+              prefetch={false}
+            >
               {c.name}
             </Link>
           </h3>
