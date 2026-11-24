@@ -7,8 +7,10 @@
 // · 标题字号对齐纪录页 h1（26px/39px，CSS 兜）；
 // · 发起人整块下线（张老师 03:10 定「隐藏发起人」）；
 // · 右上角按钮组整组下线（报名/进行中/已结束钮及其 hover 气泡随之退役——报名改走详情页右栏）；
-// · 状态标签：绿「进行中」/ 金「未开始」/ 绿「已报名✓」（未结束且已报名时追加）/
+// · 状态标签：绿「进行中」/ 金「未开始」/ 绿「已报名✓」（仅未开赛且已报名时追加）/
 //   亮灰「已结束」，圆角描边小标签（配色同全站级别色系）。
+//   2026-11-24 张老师需求：已开赛（status=active/ended）标题后不再显示「已报名✓」，
+//   列表页与详情页共用本组件，一处改动两页同效。
 //
 // 2026-11-18 张老师需求：
 // · 标题行不再显示起止日期，改图表下方「比赛时间：11月11日 ~ 12月3日」一行；
@@ -75,11 +77,12 @@ export function TourBlock({
             </Link>
           </h3>
           {/* 状态标签（七轮 03:10 张老师定）：绿「进行中」/金「未开始」/亮灰「已结束」；
-              已报名且未结束时追加绿色「已报名✓」（可与前两者并存） */}
+              2026-11-24 张老师定：「已报名✓」只在未开赛（upcoming）时追加，
+              已开赛（active/ended）标题后不再显示 */}
           {c.status === "active" && <span className="comp_status_tag st_active">进行中</span>}
           {c.status === "upcoming" && <span className="comp_status_tag st_upcoming">未开始</span>}
           {c.status === "ended" && <span className="comp_status_tag st_ended">已结束</span>}
-          {c.joined && c.status !== "ended" && (
+          {c.joined && c.status === "upcoming" && (
             <span className="comp_status_tag st_joined">已报名✓</span>
           )}
         </div>
