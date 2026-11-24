@@ -17836,20 +17836,25 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_status_tag.st_ended { background: rgba(177, 177, 164, 0.12); color: #b1b1a4; border-color: rgba(177, 177, 164, 0.35); }
 
 /* 总奖金（标题恢复 26px 后奖金跟随纪录页 h2 em 的 20px 档），hover 出分配方案气泡 */
-.comp_tipwrap { position: relative; display: inline-block; }
+/* 2026-11-24 修 960 宽水平滚动条：气泡原以 125px 奖金锚点居中 + nowrap，长分配方案
+   右缘越出视口（960 越 7px、≤880 越 200+px）。锚点改 static，气泡改挂 .comp_head
+   （与主栏同宽），右缘对齐奖金区并允许按栏宽折行；箭头单独锚在奖金中心附近。 */
+.comp_tipwrap { position: static; display: inline-block; }
 .comp_prize { font-size: 20px; line-height: 39px; color: #b1b1a4; white-space: nowrap; }
 .comp_prize b { color: #fdc61a; }
 
-/* 朝上气泡（hover 显示；箭头朝下指按钮） */
+/* 朝上气泡（hover 显示；箭头朝下指奖金） */
+.comp_head { position: relative; }
 .comp_tip {
-  position: absolute; bottom: calc(100% + 9px); left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: calc(100% + 9px); right: 0; left: auto; transform: none;
+  max-width: calc(100vw - 24px);
   background: #1e1f1c; border: 1px solid #49483e; border-radius: 4px;
   padding: 6px 10px; font-size: 12px; line-height: 18px; color: #b1b1a4;
-  white-space: nowrap; opacity: 0; visibility: hidden; transition: opacity 0.15s;
+  white-space: normal; opacity: 0; visibility: hidden; transition: opacity 0.15s;
   pointer-events: none; z-index: 950; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
 }
 .comp_tip::after {
-  content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px;
+  content: ""; position: absolute; top: 100%; right: 60px; left: auto; margin-left: 0;
   border: 5px solid transparent; border-top-color: #49483e;
 }
 .comp_tipwrap:hover .comp_tip { opacity: 1; visibility: visible; }
