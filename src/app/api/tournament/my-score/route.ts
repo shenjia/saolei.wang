@@ -67,6 +67,9 @@ export async function POST(req: Request) {
     score,
     rank,
     calc: r?.calc ?? [],
+    // 逐盘明细（2026-11-24）：练习页比赛统计格按「该级别最好的 N 盘」渲染，
+    // hover 显示该盘成绩（与总分同源，来自 computePlayerScores.detail）
+    detail: r?.detail ?? [],
     filled: r?.filled ?? {},
   });
 }

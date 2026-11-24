@@ -43,7 +43,7 @@ export interface OnlineCompParam {
     metric: TourMetricKey;
     topn: Record<string, number>;
     includeLevels: string[];
-    scoreSnapshot: { score: number; rank: number; calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[] } | null;
+    scoreSnapshot: { score: number; rank: number; calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[]; detail: { lv: string; videos: { vid: number; value: number }[] }[] } | null;
   } | null;
   /** ?c= 指向的比赛无效（不存在/未开始/已结束）时的人话提示 */
   compError: string | null;

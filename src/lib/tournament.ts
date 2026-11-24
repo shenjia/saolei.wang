@@ -1684,6 +1684,8 @@ export async function getMyScoreValues(
   mine: PlayerScore | undefined;
   /** 本人 calc 过程（mine 存在时空数组也直传） */
   calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[];
+  /** 本人各级别选入计分的实盘明细（2026-11-24，练习页统计格 hover） */
+  detail: ScoreVideoDetail[];
   /** 本人各级别补保底局数 */
   filled: Record<string, number>;
 } | null> {
@@ -1760,6 +1762,7 @@ export async function getMyScoreValues(
       level: levelMap.get(r.id) ?? "",
       value: v,
       noRecord: infoMap.get(r.id)?.noRecord ?? false,
+      vid: Number(r.id), // 逐盘明细用（2026-11-24）
     };
   });
   const scores = computePlayerScores(
@@ -1793,13 +1796,14 @@ export async function getMyScoreValues(
       calc.push({ lv, n, real: 0, fill, floorScore });
       if (n > 0) any = true;
     }
-    if (any) mine = { score: sum, parts, filled, calc };
+    if (any) mine = { score: sum, parts, filled, calc, detail: [] };
   }
   return {
     values,
     scores,
     mine,
     calc: mine ? mine.calc : [],
+    detail: mine ? mine.detail : [],
     filled: mine ? mine.filled : {},
   };
 }
@@ -1816,6 +1820,8 @@ export async function getMyScoreSnapshot(
   score: number;
   rank: number;
   calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[];
+  /** 各级别选入计分的实盘明细（2026-11-24 练习页统计格 hover） */
+  detail: ScoreVideoDetail[];
   filled: Record<string, number>;
 } | null> {
   const r = await getMyScoreValues(compId, uid, sessWin);
@@ -1826,7 +1832,7 @@ export async function getMyScoreSnapshot(
   });
   const desc = comp ? parseScoreConfig(comp.scoreMode, comp.scoreConfig)?.desc ?? false : false;
   const rank = 1 + [...r.scores.values()].filter((s) => (desc ? s.score > r.mine!.score : s.score < r.mine!.score)).length;
-  return { score: r.mine.score, rank, calc: r.mine.calc, filled: r.mine.filled };
+  return { score: r.mine.score, rank, calc: r.mine.calc, detail: r.mine.detail, filled: r.mine.filled };
 }
 
 /** 比赛破纪录预演（2026-11-22 张老师需求：练习页比赛模式「完成一盘→破纪录气泡」）：
@@ -2549,10 +2555,22 @@ export interface TourScoreVideo {
   /** 计分数据项原值（score 域；time=毫秒，其余=落库×1000） */
   value: number;
   noRecord: boolean;
+  /** 录像 id（2026-11-24 练习页比赛统计格逐盘 hover 用；可选——排行榜等调用点
+   *  不消费明细，不传亦可；仅 getMyScoreValues 透传真实 id） */
+  vid?: number;
 }
 
 /** 旧字段名兼容别名：realTime → value（历史调用点迁移期共存） */
 export type TourScoreVideoLegacy = TourScoreVideo;
+
+/** 比赛统计格逐盘明细（2026-11-24 张老师需求）：每级别选入计分的实盘，
+ *  按成绩从好到差排序（与 sum_topn 取 N 盘完全同源）——练习页底部统计格
+ *  默认展示「该级别成绩最好的 N 盘」，hover 显示该盘成绩。
+ *  ⚠️ 与 calc[].real 严格一致：videos.length === real（运气盘/限界外已过滤）。 */
+export interface ScoreVideoDetail {
+  lv: string;
+  videos: { vid: number; value: number }[];
+}
 
 export interface PlayerScore {
   /** 总成绩（score 内部域；desc=true 时「越大越好」——展示/排序端按 conf.desc 解释）；
@@ -2564,6 +2582,8 @@ export interface PlayerScore {
   filled: Record<string, number>;
   /** 计算过程（2026-11-18 晚张老师定：hover 成绩气泡展示；每级别一条） */
   calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[];
+  /** 逐盘明细（2026-11-24；仅练习页比赛统计格消费；target_diff/纯保底恒空） */
+  detail: ScoreVideoDetail[];
 }
 
 /** 批量计算玩家成绩：Map<uid, PlayerScore>，无有效录像且无需保底的玩家不在 Map。
@@ -2589,7 +2609,9 @@ export function computePlayerScores(
   if (mode === "sum_topn") {
     const desc = conf.desc;
     // 各级别最好/最差 N 局加总（跨级别累加），不足 N 局补保底
-    const byUserLevel = new Map<number, Map<string, number[]>>();
+    // 逐盘保留 vid（2026-11-24）：与 value 成对，排序取 N 后产出明细；
+    // 无 vid 的调用点（排行榜等不消费明细）用 0 占位，不影响算分
+    const byUserLevel = new Map<number, Map<string, { value: number; vid: number }[]>>();
     for (const v of valid) {
       const n = conf.topn[v.level] ?? 0;
       if (n <= 0) continue;
@@ -2597,26 +2619,29 @@ export function computePlayerScores(
       if (!byUserLevel.has(uid)) byUserLevel.set(uid, new Map());
       const m = byUserLevel.get(uid)!;
       if (!m.has(v.level)) m.set(v.level, []);
-      m.get(v.level)!.push(v.value);
+      m.get(v.level)!.push({ value: v.value, vid: v.vid ?? 0 });
     }
     for (const [uid, levels] of byUserLevel) {
       let sum = 0;
       const parts: Record<string, number> = {};
       const filled: Record<string, number> = {};
       const calc: PlayerScore["calc"] = [];
+      const detail: ScoreVideoDetail[] = [];
       for (const lv of ["beg", "int", "exp"] as const) {
         const n = conf.topn[lv] ?? 0;
         if (n <= 0 || !lvOn(lv)) continue;
-        const vals = (levels.get(lv) ?? []).sort((a, b) => (desc ? b - a : a - b));
-        const real = vals.slice(0, n).reduce((a, b) => a + b, 0);
+        const vals = (levels.get(lv) ?? []).slice().sort((a, b) => (desc ? b.value - a.value : a.value - b.value));
+        const picked = vals.slice(0, n); // 选入计分的 N 盘（按成绩从好到差）
+        const real = picked.reduce((a, b) => a + b.value, 0);
         const fill = Math.max(n - vals.length, 0);
         parts[lv] = real;
         filled[lv] = fill;
         const floorScore = conf.floor[lv] ?? 0;
         sum += real + fill * floorScore;
         calc.push({ lv, n, real, fill, floorScore });
+        detail.push({ lv, videos: picked.map((v) => ({ vid: v.vid, value: v.value })) });
       }
-      out.set(uid, { score: sum, parts, filled, calc });
+      out.set(uid, { score: sum, parts, filled, calc, detail });
     }
     return out;
   }
@@ -2626,7 +2651,7 @@ export function computePlayerScores(
       const uid = Number(v.user);
       const err = Math.abs(v.value - targetScore);
       if (!out.has(uid) || err < out.get(uid)!.score) {
-        out.set(uid, { score: err, parts: {}, filled: {}, calc: [] });
+        out.set(uid, { score: err, parts: {}, filled: {}, calc: [], detail: [] });
       }
     }
     return out;
