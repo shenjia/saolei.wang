@@ -170,6 +170,19 @@ export default async function CompetitionDetailPage({
           ? "playing"
           : "joined";
 
+  // 窗口赛结束后的按钮四态（2026-11-24 张老师需求）：与完赛动态同口径——
+  // 未报名（无报名行，含历史有窗口无 entry 的存量数据）/ 已弃赛（窗口内零录像）/
+  // 未完赛（某级别用了保底）/ 已完赛（其余）。判据复用 myResult 现成字段，
+  // 与 getTourEventsPage.finishWinFor + TourEventsFeed 渲染完全同源。
+  const finishState: "unjoined" | "abandoned" | "incomplete" | "finished" =
+    !myResult?.joined
+      ? "unjoined"
+      : myResult.videos === 0
+        ? "abandoned"
+        : myResult.calc?.some((x) => x.fill > 0)
+          ? "incomplete"
+          : "finished";
+
   return (
     <div id="page" className="two_columns comp_page">
       {/* comp_detail：详情页专用钩子——主栏顶部留白（三轮 16:40 张老师定「主板块贴 header 不对」） */}
@@ -233,18 +246,20 @@ export default async function CompetitionDetailPage({
         </li>
 
         <li className="sidebar">
-          {/* 登录态：按钮区按状态分流（2026-11-19 早张老师定）：
-              · 已结束 → 不显示任何按钮
-              · 窗口赛（windowHours>0）进行中 → WindowPlayBox（未开赛单按钮+确认窗；
-                已开赛个人标识+进入比赛/传录像双钮+倒计时色阶）
+          {/* 登录态：按钮区按状态分流：
+              · 窗口赛（windowHours>0）所有状态 → WindowPlayBox；个人窗口已结束时
+                按完赛动态四态出银灰按钮 +（比赛未正式结束时）比赛结束倒计时
               · 集体赛：已开始且已报名 → 「进入比赛、传录像」双钮（原 #play_row）；
                 未开始或未报名 → 「报名参赛」单按钮（风格同首页开始练习，图标=_PERSON
                 旗标；已报名未开赛变绿色「已报名参赛」不可点）+ 下方倒计时
                 「距离开赛还有…/距离比赛结束还有…」
+              · 2026-11-24 张老师需求：已结束且未报名（集体赛/窗口赛无窗口均同）→
+                玩家卡片上方显示银灰不可点「未报名」钮（样式同「已完赛」），
+                下方不再显示任何时间；「成绩」板块同时整块隐藏
               FlopSprites 提供 #face-flat 笑脸 symbol（纯 0×0 贴图库，无视觉占位） */}
-          {session && c.status !== "ended" && (
+          {session && (
             <>
-              <FlopSprites />
+              {c.status !== "ended" && <FlopSprites />}
               {c.windowHours > 0 ? (
                 <WindowPlayBox
                   compId={compId}
@@ -255,7 +270,16 @@ export default async function CompetitionDetailPage({
                   joined={!!myResult?.joined}
                   start={c.start}
                   end={c.end}
+                  finishState={finishState}
                 />
+              ) : c.status === "ended" ? (
+                !myResult?.joined && (
+                  <div className="win_play_box">
+                    <button className="win_start_btn win_finished_btn" disabled>
+                      <span>未报名</span>
+                    </button>
+                  </div>
+                )
               ) : myResult?.joined && c.status === "active" ? (
                 <div id="play_row">
                   <Link id="play_entry" href={`/online?c=${compId}`} target="_blank">
@@ -293,8 +317,10 @@ export default async function CompetitionDetailPage({
               我的成绩（2026-11-22 张老师定）：展示比赛总分（原单盘最好口径与排行榜
               排序值/名次对不上，且图表头部「最好成绩」本就是总分口径），hover 出与
               排行榜完全一致的计算过程气泡（复用 .comp_rank_time:hover .comp_calc 触发，
-              锚点加 comp_score_tip 类保持同款样式）；我的名次数字金色 */}
-          {session && (
+              锚点加 comp_score_tip 类保持同款样式）；我的名次数字金色
+              2026-11-24 张老师需求：已结束且未报名不显示本板块（改用卡片上方
+              「未报名」银灰钮，见上），避免空状态行充数 */}
+          {session && !(c.status === "ended" && !myResult?.joined) && (
             <div className="box comp_stats">
               <h2>成绩</h2>
               <div className="comp_stat_row">

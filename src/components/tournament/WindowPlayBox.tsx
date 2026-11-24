@@ -12,8 +12,12 @@
 //     绿气泡「个人比赛标识：xxx （已复制到剪贴板）」
 //   - 已开窗口 → 显示个人标识 + 「进入比赛」「传录像」双钮 + 倒计时
 //     「比赛剩余时间：xx天xx小时xx分钟」——>1h 绿 / ≤30min 黄 / ≤10min 玫瑰红
-//   - 个人窗口已结束（finished，2026-11-22 张老师定 18875 事故）→ 银灰「已完赛」
+//   - 个人窗口已结束（finished，2026-11-22 张老师定 18875 事故）→ 银灰状态按钮
 //     不可点击；一人一赛只能开一次（服务端同步防御）
+//   2026-11-24 张老师需求：窗口结束后的按钮按完赛动态文案四态——未报名/已完赛/
+//   未完赛/已弃赛（由页面按 joined+videos+calc 判定传入）；下方不再写死
+//   「比赛时间已结束」，比赛尚未正式结束时改显比赛结束倒计时；比赛正式结束
+//   （status=ended 或倒计时归零）后按钮下方不再显示任何时间
 // · 集体赛（windowHours=0）走原 #play_row 双钮（页面自身渲染，本组件不渲染）
 
 import { useEffect, useState } from "react";
@@ -30,6 +34,7 @@ export function WindowPlayBox({
   joined,
   start,
   end,
+  finishState,
 }: {
   compId: number;
   windowHours: number;
@@ -46,6 +51,8 @@ export function WindowPlayBox({
   start: number;
   /** 比赛结束时刻（报名盒倒计时用） */
   end: number;
+  /** 窗口结束后的按钮文案（与完赛动态同口径，页面按 joined/videos/calc 判定） */
+  finishState: "unjoined" | "abandoned" | "incomplete" | "finished";
 }) {
   const [sess, setSess] = useState(session0);
   const [starting, setStarting] = useState(false);
@@ -122,8 +129,8 @@ export function WindowPlayBox({
 
   // 倒计时文案与色阶
   const now = Math.floor(Date.now() / 1000);
-  // 完赛判定：SSR 快照 finished 或客户端倒计时归零（tick 每 30s 刷新触发重渲染）
-  const isFinished = !!sess && (sess.finished || sess.end <= now);
+  // 完赛判定：SSR 快照 finished / 客户端倒计时归零 / 比赛整体已结束（无窗口者）
+  const isFinished = sess ? sess.finished || sess.end <= now : status === "ended";
   const remain = sess && !isFinished ? Math.max(sess.end - now, 0) : 0;
   const d = Math.floor(remain / 86400);
   const h = Math.floor((remain % 86400) / 3600);
@@ -132,16 +139,27 @@ export function WindowPlayBox({
   const remainMin = remain / 60;
   const color = remainMin <= 10 ? "#f92672" : remainMin <= 30 ? "#e6c07b" : "#a6e22e";
 
-  if (!sess) {
+  // 比赛结束倒计时（未开窗口/窗口已结束态共用；比赛正式结束后整行不渲染）
+  const compRemain = Math.max(compEnd - now, 0);
+  const cd = Math.floor(compRemain / 86400);
+  const ch = Math.floor((compRemain % 86400) / 3600);
+  const cm = Math.floor((compRemain % 3600) / 60);
+  const compColor =
+    compRemain / 60 <= 10 ? "#f92672" : compRemain / 60 <= 30 ? "#e6c07b" : "#a6e22e";
+  const compCountdown =
+    status === "ended" || compRemain === 0 ? null : (
+      <p className="win_countdown" style={{ color: compColor }}>
+        距离比赛结束还有：
+        <span suppressHydrationWarning>
+          {cd > 0 ? `${cd}天` : ""}
+          {ch}小时{cm}分钟
+        </span>
+      </p>
+    );
+
+  if (!sess && !isFinished) {
     // 未开个人窗口：按钮下挂比赛结束倒计时（2026-11-22 张老师定）——
     // 提示还剩多久不能开赛；色阶同已开窗口态（>1h 绿 / ≤30min 黄 / ≤10min 玫瑰红）
-    const compRemain = Math.max(compEnd - now, 0);
-    const cd = Math.floor(compRemain / 86400);
-    const ch = Math.floor((compRemain % 86400) / 3600);
-    const cm = Math.floor((compRemain % 3600) / 60);
-    const compRemainMin = compRemain / 60;
-    const compColor =
-      compRemainMin <= 10 ? "#f92672" : compRemainMin <= 30 ? "#e6c07b" : "#a6e22e";
     return (
       <div className="win_play_box">
         <button className="win_start_btn" onClick={startRace} disabled={starting}>
@@ -149,30 +167,30 @@ export function WindowPlayBox({
           <img src="/images/stopwatch-icon.png" alt="" width={28} height={28} />
           开始比赛<span className="win_hours_sub">（总计 {windowHours} 小时）</span>
         </button>
-        <p className="win_countdown" style={{ color: compColor }}>
-          距离比赛结束还有：
-          <span suppressHydrationWarning>
-            {cd > 0 ? `${cd}天` : ""}
-            {ch}小时{cm}分钟
-          </span>
-        </p>
+        {compCountdown}
       </div>
     );
   }
-  // 个人窗口已结束：银灰「已完赛」不可点击（2026-11-22 张老师定 18875 事故——
-  // 窗口结束后绝不能再开赛；服务端 start 接口同步拒绝）
+  // 个人窗口已结束（或比赛已结束且无窗口）：银灰状态按钮不可点，
+  // 文案与完赛动态四态一致（未报名/已弃赛/未完赛/已完赛）
   if (isFinished) {
+    const labels = {
+      unjoined: "未报名",
+      abandoned: "已弃赛",
+      incomplete: "未完赛",
+      finished: "已完赛",
+    };
     return (
       <div className="win_play_box">
         <button className="win_start_btn win_finished_btn" disabled>
-          <span>已完赛</span>
+          <span>{labels[finishState]}</span>
         </button>
-        <p className="win_countdown" style={{ color: "#939387" }}>
-          比赛时间已结束
-        </p>
+        {compCountdown}
       </div>
     );
   }
+  // 上面两分支已覆盖无窗口（未结束→开始比赛、已结束→状态按钮），此处必有会话
+  if (!sess) return null;
   return (
     <div className="win_play_box">
       <div className="win_race_row">

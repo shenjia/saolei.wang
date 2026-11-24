@@ -131,6 +131,8 @@ export interface TourRow {
   prizeLines: string[];
   code: string; // 比赛标识（""=未设置，前台不展示标识行）
   entryCount: number;
+  /** 完赛人数（标题状态标签「xx人已完赛」用；同 getTourDetailStats.finishers 口径） */
+  finishedCount: number;
   joined: boolean; // 当前登录用户是否已报名
   levels: Level[]; // 收录录像级别（张老师 2026-11-13：可多选，默认初中高都有）
   /** 自选窗口时长（小时，0=同期集体赛；>0=窗口赛，张老师 2026-11-19） */
@@ -269,6 +271,7 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
       windowHours: c.windowHours ?? 0,
       mySession: null, // 列表行批量填充见下方会话查询
       entryCount: countMap.get(cid) ?? 0,
+      finishedCount: 0, // 本页行填值见下方（只算当前页，不逐场扫全库）
       joined: mineSet.has(cid),
       levels: parseLevels(c.includeLevels),
       creatorId: Number(c.creatorId),
@@ -300,6 +303,9 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
   const totalPages = Math.max(1, Math.ceil(total / size));
   const p = Math.min(Math.max(page, 1), totalPages);
   const pageRows = rows.slice((p - 1) * size, p * size);
+  // 完赛人数批量算分（与后台/详情页 finishers 同口径）：只算当前页行，一次取齐四表
+  const finisherMap = await getTourFinishersBulk(pageRows.map((r) => Number(r.id)));
+  pageRows.forEach((r) => { r.finishedCount = finisherMap.get(Number(r.id))?.length ?? 0; });
   const chartTargets = pageRows.filter((r) => r.status !== "upcoming");
   const chartList = await Promise.all(chartTargets.map((r) => getTourRanking(Number(r.id), null)));
   const chartMap = new Map<string, { rank: number; score: number; name?: string; uid?: number; englishName?: string; sex?: number; title?: string; classic?: { name: string; color: string } | null }[]>();
@@ -430,13 +436,99 @@ export async function getTourGlobalStats(): Promise<TourGlobalStats> {
 
 export interface TourMyStats {
   joined: number; // 参加比赛次数（已报名数）
-  bestRank: number | null; // 最高排名（成绩采集下一期接入）
+  /** 最高排名（2026-11-24 张老师需求：参赛记录不再恒「—」）——
+   *  我报名的全部比赛中按各场排行榜同口径（computePlayerScores + index+1）算出的最好名次 */
+  bestRank: number | null;
   prize: number; // 累计奖金（成绩采集下一期接入）
 }
 
 export async function getTourMyStats(uid: number): Promise<TourMyStats> {
-  const joined = await prisma.tournamentEntry.count({ where: { userId: BigInt(uid) } });
-  return { joined, bestRank: null, prize: 0 }; // TODO 成绩采集期接入：bestRank / prize
+  const entries = await prisma.tournamentEntry.findMany({
+    where: { userId: BigInt(uid) },
+    select: { tournamentId: true },
+  });
+  const compIds = [...new Set(entries.map((e) => Number(e.tournamentId)))];
+  let bestRank: number | null = null;
+  if (compIds.length) {
+    const bigIds = compIds.map((n) => BigInt(n));
+    // 一次取齐我报名比赛的 配置/录像/会话/明细 四表，按场分组算名次（不逐场 N×5）
+    const [comps, vids, sessions] = await Promise.all([
+      prisma.tournament.findMany({
+        where: { id: { in: bigIds } },
+        select: { id: true, scoreMode: true, scoreConfig: true, includeLevels: true, windowHours: true },
+      }),
+      prisma.video.findMany({
+        where: { tournamentId: { in: bigIds }, status: { not: 0 } },
+        select: { id: true, tournamentId: true, user: true, level: true, createTime: true },
+      }),
+      prisma.tournamentWindowSession.findMany({
+        where: { tournamentId: { in: bigIds } },
+        select: { tournamentId: true, userId: true, startTime: true, endTime: true },
+      }),
+    ]);
+    const infos = await prisma.videoInfo.findMany({
+      where: { id: { in: vids.map((v) => v.id) } },
+      select: { id: true, realTime: true, board3bv: true, noRecord: true },
+    });
+    const infoMap = new Map(infos.map((i) => [i.id, i]));
+    const metrics = vids.length
+      ? await prisma.videoMetrics.findMany({
+          where: { id: { in: vids.map((v) => v.id) } },
+          select: { id: true, bvs: true, ioe: true, thrp: true, cp: true },
+        })
+      : [];
+    const metricMap = new Map(metrics.map((m) => [m.id, m]));
+    for (const comp of comps) {
+      const conf = parseScoreConfig(comp.scoreMode, comp.scoreConfig);
+      if (!conf) continue;
+      // 判窗与 getTourRanking 同源：集体赛（含会话表空的历届导入）不过滤上传时间；
+      // 窗口赛按各玩家自己的会话窗收录像
+      const compSess = sessions.filter((s) => String(s.tournamentId) === String(comp.id));
+      const useSess = !!comp.windowHours && compSess.length > 0;
+      const sessBy = new Map(compSess.map((s) => [Number(s.userId), s]));
+      const inWin = vids.filter((v) => {
+        if (String(v.tournamentId) !== String(comp.id)) return false;
+        if (!useSess) return true;
+        const s = sessBy.get(Number(v.user));
+        const t = Number(v.createTime);
+        return !!s && t >= Number(s.startTime) && t <= Number(s.endTime);
+      });
+      if (!inWin.length) continue;
+      const levelMap = new Map(inWin.map((v) => [v.id, v.level]));
+      const valueOf = (vid: bigint): number => {
+        if (conf.metric === "time") {
+          const info = infoMap.get(vid);
+          return info && !info.noRecord ? info.realTime : 0;
+        }
+        if (conf.metric === "3bv") {
+          const info = infoMap.get(vid);
+          return info && !info.noRecord ? info.board3bv * 1000 : 0;
+        }
+        const m = metricMap.get(vid);
+        if (!m) return 0;
+        const raw = conf.metric === "3bvs" ? m.bvs : conf.metric === "ioe" ? m.ioe : conf.metric === "thrp" ? m.thrp : m.cp;
+        return raw > 0 ? raw * 1000 : 0;
+      };
+      const scores = computePlayerScores(
+        comp.scoreMode,
+        comp.scoreConfig,
+        inWin.map((v) => ({
+          user: v.user,
+          level: levelMap.get(v.id) ?? "",
+          value: valueOf(v.id),
+          noRecord: infoMap.get(v.id)?.noRecord ?? false,
+        })),
+        comp.includeLevels.split(",").map((s) => s.trim()).filter(Boolean),
+      );
+      // 名次口径与 getTourRanking 完全一致（排序后 index+1，不合并并列）
+      const sorted = [...scores.entries()].sort((a, b) =>
+        conf.desc ? b[1].score - a[1].score : a[1].score - b[1].score
+      );
+      const idx = sorted.findIndex(([u]) => u === uid);
+      if (idx >= 0 && (bestRank === null || idx + 1 < bestRank)) bestRank = idx + 1;
+    }
+  }
+  return { joined: entries.length, bestRank, prize: 0 };
 }
 
 /** header「比赛」导航态（2026-11-22 张老师需求）：全站顶栏入口着色——
@@ -2301,8 +2393,9 @@ export async function getTournamentDetail(
   const c = await prisma.tournament.findUnique({ where: { id: BigInt(id) } });
   if (!c) return null;
   const now = Math.floor(Date.now() / 1000);
-  const [entryCount, creator, scoreRow, joined] = await Promise.all([
+  const [entryCount, finisherMap, creator, scoreRow, joined] = await Promise.all([
     prisma.tournamentEntry.count({ where: { tournamentId: c.id } }),
+    getTourFinishersBulk([id]),
     prisma.user.findUnique({
       where: { id: c.creatorId },
       select: { chineseName: true, englishName: true, sex: true, status: true },
@@ -2407,6 +2500,7 @@ export async function getTournamentDetail(
         })()
       : null,
     entryCount,
+    finishedCount: finisherMap.get(id)?.length ?? 0,
     joined: !!joined,
     levels: levelSet.size ? LEVELS.filter((l) => levelSet.has(l)) : [...LEVELS],
     creatorId: Number(c.creatorId),

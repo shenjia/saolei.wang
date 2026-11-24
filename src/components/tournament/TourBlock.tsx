@@ -10,7 +10,8 @@
 // · 状态标签：绿「进行中」/ 金「未开始」/ 绿「已报名✓」（仅未开赛且已报名时追加）/
 //   亮灰「已结束」，圆角描边小标签（配色同全站级别色系）。
 //   2026-11-24 张老师需求：已开赛（status=active/ended）标题后不再显示「已报名✓」，
-//   列表页与详情页共用本组件，一处改动两页同效。
+//   列表页与详情页共用本组件，一处改动两页同效；同日追加状态标签人数后缀——
+//   进行中/已结束「，xx人已完赛」、未开始「，xx人已报名」，0 人不显示后缀。
 //
 // 2026-11-18 张老师需求：
 // · 标题行不再显示起止日期，改图表下方「比赛时间：11月11日 ~ 12月3日」一行；
@@ -64,6 +65,10 @@ export function TourBlock({
   /** 观看者 uid（2026-11-19 张老师定：参赛且在榜 → 图表绿点+垂线标记我的位置） */
   myUid?: number;
 }) {
+  // 状态标签人数后缀（2026-11-24 张老师需求）：进行中/已结束显示完赛人数、
+  // 未开始显示报名人数；人数为 0 时整段后缀不显示（含逗号）
+  const doneSuffix = c.finishedCount > 0 ? `，${c.finishedCount}人已完赛` : "";
+  const signupSuffix = c.entryCount > 0 ? `，${c.entryCount}人已报名` : "";
   return (
     <div className="box comp_item">
       {/* 标题行：标题+状态标签左，总奖金右（2026-11-18 起止日期移图表下方「比赛时间」行） */}
@@ -86,9 +91,9 @@ export function TourBlock({
           {/* 状态标签（七轮 03:10 张老师定）：绿「进行中」/金「未开始」/亮灰「已结束」；
               2026-11-24 张老师定：「已报名✓」只在未开赛（upcoming）时追加，
               已开赛（active/ended）标题后不再显示 */}
-          {c.status === "active" && <span className="comp_status_tag st_active">进行中</span>}
-          {c.status === "upcoming" && <span className="comp_status_tag st_upcoming">未开始</span>}
-          {c.status === "ended" && <span className="comp_status_tag st_ended">已结束</span>}
+          {c.status === "active" && <span className="comp_status_tag st_active">进行中{doneSuffix}</span>}
+          {c.status === "upcoming" && <span className="comp_status_tag st_upcoming">未开始{signupSuffix}</span>}
+          {c.status === "ended" && <span className="comp_status_tag st_ended">已结束{doneSuffix}</span>}
           {c.joined && c.status === "upcoming" && (
             <span className="comp_status_tag st_joined">已报名✓</span>
           )}
