@@ -5,6 +5,7 @@
 // 提交走统一 /api/admin/action（siteupdate.add / siteupdate.edit）。
 // 编辑模式：清单行「编辑」按钮派发 sl-siteupdate-edit 事件回填，可取消。
 // 同日回填（2026-11-05）：选定日期已有记录时自动回填进入编辑模式，避免登记重复条目。
+// 自动回填退出（2026-11-25）：日期改到无记录日期时退回新增态；手动点「编辑」进入的保留，避免改不了记录日期。
 // 草稿秒级备份（2026-11-09 张老师要求，同评论框）：键入即备份 localStorage，
 // 误关页面后重开自动恢复，提交成功清空当前键；新增按 uid、编辑按 uid+记录 id 隔离。
 
@@ -48,6 +49,8 @@ export function SiteUpdateForm({ rows, authorId }: { rows: RowLike[]; authorId: 
   const [content, setContent] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<EditingRow | null>(null);
+  // 编辑态来源：true=同日自动回填（目标日期无记录时应退回新增态）；false=清单行手动点「编辑」
+  const [editingAuto, setEditingAuto] = useState(false);
   // 日期输入防抖：中间态（如输到「2」）不查记录，停稳 1 秒后只回填最终日期
   const backfillTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelBackfill = () => {
@@ -99,6 +102,7 @@ export function SiteUpdateForm({ rows, authorId }: { rows: RowLike[]; authorId: 
         backfillTimer.current = null;
       }
       setEditing(d);
+      setEditingAuto(false);
       setDate(toInputDate(d.date));
       // 内容由草稿键切换后的一次性回落补上（草稿优先，无草稿回落已保存内容）
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -110,19 +114,30 @@ export function SiteUpdateForm({ rows, authorId }: { rows: RowLike[]; authorId: 
   // 挂载时当天已有记录 → 直接回填进入编辑模式（内容走回落）
   useEffect(() => {
     const hit = byDate.get(todayStr());
-    if (hit) setEditing(hit);
+    if (hit) {
+      setEditing(hit);
+      setEditingAuto(true);
+    }
   }, [byDate]);
 
-  /** 切换日期：停稳 1 秒后命中已有记录 → 回填进编辑模式（含清单编辑按钮改日期时换目标记录） */
+  /** 切换日期：停稳 1 秒后按最终日期查记录——命中则回填编辑；无记录且当前是自动回填的编辑态则退回新增态 */
   const changeDate = (d: string) => {
     setDate(d);
     cancelBackfill();
     backfillTimer.current = setTimeout(() => {
       backfillTimer.current = null;
       const hit = byDate.get(d);
-      if (hit && hit.id !== editing?.id) {
-        setEditing(hit);
-        toast(`该日期已有记录（#${hit.id}），已回填内容，可直接编辑`, "info");
+      if (hit) {
+        if (hit.id !== editing?.id) {
+          setEditing(hit);
+          setEditingAuto(true);
+          toast(`该日期已有记录（#${hit.id}），已回填内容，可直接编辑`, "info");
+        }
+      } else if (editing && editingAuto) {
+        // 之前是被别的日期自动回填进来的，现在目标日期没有记录 → 退回新增态
+        // 内容由草稿键切回新增键后的一次性回落补上（恢复此前未提交的新增草稿）
+        setEditing(null);
+        setEditingAuto(false);
       }
     }, DATE_BACKFILL_DELAY_MS);
   };
@@ -147,13 +162,17 @@ export function SiteUpdateForm({ rows, authorId }: { rows: RowLike[]; authorId: 
       if (data.ok) {
         draft.clear(); // 提交成功清空当前键草稿
         setEditing(null);
+        setEditingAuto(false);
         setContent("");
         const t = todayStr();
         setDate(t);
         // 重置回当天后，若当天已有记录则继续回填编辑（表单始终反映所选日期；
         // 草稿键切到该记录后内容由一次性回落补上）
         const hit = byDate.get(t);
-        if (hit) setEditing(hit);
+        if (hit) {
+          setEditing(hit);
+          setEditingAuto(true);
+        }
         router.refresh();
       }
     } catch {
@@ -182,6 +201,7 @@ export function SiteUpdateForm({ rows, authorId }: { rows: RowLike[]; authorId: 
             onClick={() => {
               cancelBackfill();
               setEditing(null);
+              setEditingAuto(false);
               setDate(todayStr());
               // 内容由草稿键切回新增键后的一次性回落补上（恢复此前未提交的新增草稿）
             }}
