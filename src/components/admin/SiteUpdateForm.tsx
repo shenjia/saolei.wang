@@ -8,7 +8,7 @@
 // 草稿秒级备份（2026-11-09 张老师要求，同评论框）：键入即备份 localStorage，
 // 误关页面后重开自动恢复，提交成功清空当前键；新增按 uid、编辑按 uid+记录 id 隔离。
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/Toast";
 import { useDraft, useHydrated } from "@/components/useDraft";
@@ -38,6 +38,9 @@ function todayStr(): string {
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 }
 
+/** 日期输入停稳多久后才查同日记录并回填（2026-11-25：输入 23 日先读到 2 日，防抖 1 秒） */
+const DATE_BACKFILL_DELAY_MS = 1000;
+
 export function SiteUpdateForm({ rows, authorId }: { rows: RowLike[]; authorId: number }) {
   const router = useRouter();
   // 日期默认选中当天（本地时区）
@@ -45,6 +48,17 @@ export function SiteUpdateForm({ rows, authorId }: { rows: RowLike[]; authorId: 
   const [content, setContent] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<EditingRow | null>(null);
+  // 日期输入防抖：中间态（如输到「2」）不查记录，停稳 1 秒后只回填最终日期
+  const backfillTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelBackfill = () => {
+    if (backfillTimer.current !== null) {
+      clearTimeout(backfillTimer.current);
+      backfillTimer.current = null;
+    }
+  };
+  useEffect(() => () => {
+    if (backfillTimer.current !== null) clearTimeout(backfillTimer.current);
+  }, []);
 
   // 草稿键：新增按 uid、编辑按 uid+记录 id 隔离（同 HistoryBox 口径）
   const draftKey = editing ? `siteupdate:${authorId}:${editing.id}` : `siteupdate:${authorId}`;
@@ -79,6 +93,11 @@ export function SiteUpdateForm({ rows, authorId }: { rows: RowLike[]; authorId: 
     const onEdit = (e: Event) => {
       const d = (e as CustomEvent).detail as EditingRow;
       if (!d || typeof d.id !== "number") return;
+      // 清单行点「编辑」是明确目标，撤掉尚未触发的日期回填，避免覆盖本次回填
+      if (backfillTimer.current !== null) {
+        clearTimeout(backfillTimer.current);
+        backfillTimer.current = null;
+      }
       setEditing(d);
       setDate(toInputDate(d.date));
       // 内容由草稿键切换后的一次性回落补上（草稿优先，无草稿回落已保存内容）
@@ -94,19 +113,24 @@ export function SiteUpdateForm({ rows, authorId }: { rows: RowLike[]; authorId: 
     if (hit) setEditing(hit);
   }, [byDate]);
 
-  /** 切换日期：命中已有记录 → 回填进编辑模式（含清单编辑按钮改日期时换目标记录） */
+  /** 切换日期：停稳 1 秒后命中已有记录 → 回填进编辑模式（含清单编辑按钮改日期时换目标记录） */
   const changeDate = (d: string) => {
     setDate(d);
-    const hit = byDate.get(d);
-    if (hit && hit.id !== editing?.id) {
-      setEditing(hit);
-      toast(`该日期已有记录（#${hit.id}），已回填内容，可直接编辑`, "info");
-    }
+    cancelBackfill();
+    backfillTimer.current = setTimeout(() => {
+      backfillTimer.current = null;
+      const hit = byDate.get(d);
+      if (hit && hit.id !== editing?.id) {
+        setEditing(hit);
+        toast(`该日期已有记录（#${hit.id}），已回填内容，可直接编辑`, "info");
+      }
+    }, DATE_BACKFILL_DELAY_MS);
   };
 
   const canSubmit = !busy && !!date.trim() && !!content.trim();
 
   const submit = async () => {
+    cancelBackfill(); // 提交时撤掉未触发的回填，避免提交后又被旧日期回填覆盖
     setBusy(true);
     try {
       const res = await fetch("/api/admin/action", {
@@ -156,6 +180,7 @@ export function SiteUpdateForm({ rows, authorId }: { rows: RowLike[]; authorId: 
             type="button"
             className="admin_btn sm"
             onClick={() => {
+              cancelBackfill();
               setEditing(null);
               setDate(todayStr());
               // 内容由草稿键切回新增键后的一次性回落补上（恢复此前未提交的新增草稿）
