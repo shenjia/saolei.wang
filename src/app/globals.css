@@ -10493,6 +10493,36 @@ html.op-webfs body #page {
   inset: 0;
   z-index: 100;
 }
+/* 全屏 + 低视口高（≤520px）：头部整行收掉，只留右上角退出全屏钮
+   （2026-11-24 张老师定）。960×600 之类低分屏进网页全屏时标题/级别导航/
+   今日统计/模式与设置按钮全隐藏，腾出的高度交给棋盘自动适配；
+   #btn_fs 仍是原来的切换钮（全屏态点击＝退出），只改定位不改行为。
+   ⚠️ 选择器按子元素隐藏而非整块 news_head display:none：JS 对 h1/tabs/
+   sw_webfs 等仍是裸引用，节点必须在 DOM 里；退出全屏后原样恢复。
+   原生 :fullscreen 同口径（低高度下站头本就不渲染，只收组件头部） */
+@media (max-height: 520px) {
+  html.op-webfs #online_play .news_head,
+  #online_play > div:fullscreen .news_head {
+    height: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+  html.op-webfs #online_play .news_head > :not(.gicons),
+  #online_play > div:fullscreen .news_head > :not(.gicons),
+  html.op-webfs #online_play .news_head .gicons > :not(#btn_fs),
+  #online_play > div:fullscreen .news_head .gicons > :not(#btn_fs) {
+    display: none !important;
+  }
+  html.op-webfs #online_play #btn_fs,
+  #online_play > div:fullscreen #btn_fs {
+    position: fixed;
+    top: 8px;
+    right: 12px;
+    z-index: 110;
+    margin: 0;
+  }
+}
 /* ---- 移动端横屏规则块在本区块靠后位置——
    媒体查询不加优先级，放前面会被后面的基础规则（如 .gzoom{display:flex}）同优先级覆盖 */
 #online_play #game_area {
