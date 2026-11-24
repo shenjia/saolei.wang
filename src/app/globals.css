@@ -12687,6 +12687,14 @@ html.op-fakefs #header {
 #online_play .bvwall.comp_mode .bw_sq.linked {
   cursor: pointer;
 }
+/* 2026-11-24 张老师增量反馈：hover 对应格加白色描边与其他格区分。
+   与终局白框 .end 同款 outline（不占布局、圆角跟随），仅比赛统计格生效——
+   普通 BV 收集墙 hover 仍只出气泡、不加边框。 */
+#online_play .bvwall.comp_mode .bw_sq:hover {
+  outline: 1.5px solid #f8f8f2;
+  outline-offset: 0.5px;
+  z-index: 2;
+}
 /* 实盘/保底 hover 气泡沿用 #online_play .bvwall .bw_tip 基础样式（深底小卡、
    bottom:12px 朝上、pointer-events:none），此处只调字号保证单行不折。 */
 #online_play .bvwall.comp_mode .bw_tip {
