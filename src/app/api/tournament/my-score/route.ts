@@ -9,7 +9,7 @@
 // · 无有效成绩（窗口内无有效盘）→ score/rank=null，客户端显「—」
 
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, renewSessionIfLow } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getMyScoreValues, parseScoreConfig } from "@/lib/tournament";
 
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     rank = 1 + [...r.scores.values()].filter((s) => (desc ? s.score > r.mine!.score : s.score < r.mine!.score)).length;
   }
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     ok: true,
     score,
     rank,
@@ -72,4 +72,8 @@ export async function POST(req: Request) {
     detail: r?.detail ?? [],
     filled: r?.filled ?? {},
   });
+  // 比赛期间 30s tick 持续保活：session 剩余不足 1 天则重签续期（2026-11-24）。
+  // 权威服务每次 WS 握手验 JWT exp，token 在对局中途到期会导致重连 401、局面丢失。
+  await renewSessionIfLow(res, session);
+  return res;
 }

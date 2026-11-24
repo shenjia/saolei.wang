@@ -228,6 +228,45 @@ export function clearSessionCookieDirectives(): string[] {
   return [base, `${base}; Domain=.saolei.wang`];
 }
 
+// ---------- 会话滑期（2026-11-24 张老师定，排行/比赛对局保活） ----------
+// 背景：JWT 是登录时刻签发的 7 天绝对过期、不滑期；权威服务每次 WS 握手都验 exp
+// （core/scripts/authority/server.mjs verifySession），对局中途 token 到期后重连即
+// 握手 401 → 连拒上抛 → 前台 exitRanked+reset → 正在进行的排行/比赛局面丢失。
+// 上传录像失败可重传，排行局面丢了没法重来——故在排行/比赛关键接口成功后重签续期。
+// 只在 Route Handler 里调（cookies().set 在 RSC 渲染期会抛错，不能在 getSession 里做）。
+const SESSION_RENEW_THRESHOLD = 24 * 3600; // 剩余不足 1 天则续满 7 天，避免每请求都写 cookie
+
+/** 会话剩余有效秒数（未登录/解析失败返回 0）。仅读 token 的 exp，不查库。 */
+export async function sessionSecondsLeft(): Promise<number> {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!token) return 0;
+  let exp = 0;
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8"));
+    if (typeof payload.exp === "number") exp = payload.exp;
+  } catch {
+    return 0;
+  }
+  return Math.max(0, exp - Math.floor(Date.now() / 1000));
+}
+
+/**
+ * 若 session 剩余不足 1 天，重签 7 天新 token 并 append 到响应（两条：host-only + 父域）。
+ * 剩余充足时零副作用（不发 Set-Cookie、不查库），故可挂在高频接口上。
+ * 返回是否实际续期（供调用方日志/测试用）。
+ */
+export async function renewSessionIfLow(
+  res: Response,
+  session: SessionUser
+): Promise<boolean> {
+  if ((await sessionSecondsLeft()) > SESSION_RENEW_THRESHOLD) return false;
+  const fresh = sign(session, SESSION_TTL);
+  const attrs = `Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL}${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
+  res.headers.append("set-cookie", `${SESSION_COOKIE}=${fresh}; ${attrs}`);
+  res.headers.append("set-cookie", `${SESSION_COOKIE}=${fresh}; ${attrs}; Domain=.saolei.wang`);
+  return true;
+}
+
 // ---------- OAuth 临时票据 ----------
 
 export interface OauthTicket {
