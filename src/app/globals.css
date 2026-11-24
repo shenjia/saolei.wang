@@ -12077,13 +12077,16 @@ body .replay_bar .rb_time {
    移动端插旗一律长按 ≥150ms，按钮无存在必要 */
 /* ---- 移动端横屏（2026-10-14 张老师定 / 10-15 改沉浸模式）：游戏区顶满视口高度
    （顶满的倍率由 JS fitZoomForLandscape 算，这里只做布局）。
-   判定与 JS matchMedia 严格一致：横屏且视口高 ≤520px
+   判定与 JS matchMedia 严格一致：横屏、视口高 ≤520px 且 pointer:coarse
    （手机横屏典型 360-430px；平板横屏 700+ 不命中，保持常规布局）。
+   2026-11-24 张老师定：必须带 pointer:coarse——低分辨率 PC（960×600 显示器，
+   浏览器内容区高 ≤520px）此前误命中横屏沉浸、站头/标题栏全被隐藏像移动版；
+   鼠标 PC 一律走桌面版式。三处横屏沉浸媒体查询（本块/13041/13206）同口径。
    2026-10-15 起横屏为「沉浸模式」：左栏（标题/级别/齿轮/全屏）整块隐藏，
    版块内只剩游戏本体，故 .news_head 相关的竖排规则已删除（见文件末尾横屏块）。
    本块必须留在 #online_play 全部基础规则之后：媒体查询不加优先级，
    同优先级时后定义者胜出（display:none 曾被后面的 .gzoom{display:flex} 覆盖） */
-@media (orientation: landscape) and (max-height: 520px) {
+@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
   /* 主体板块铺满（2026-10-15 张老师二定：横屏去掉全部 margin/padding，
      游戏界面严格占满 100% 高度——此前上下仍能看到主题板块背景色）：
      ① #page.main：删 margin 0 4px（左右各 4px 露背景）+ 清 legacy 的
@@ -13038,7 +13041,7 @@ html.op-fakefs #header {
       跟着位移（观感上是「飘」），且页面滚动后 fit 量出的 rect 基准全偏。
    ⚠️ 须在竖屏块之后：小屏手机横屏（宽 ≤768）两块同时命中，需本块覆盖。
    同优先级时后定义者胜出 */
-@media (orientation: landscape) and (max-height: 520px) {
+@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
   /* ---- 横屏禁滚动：三道锁 ----
      ① html 与 body 同时 overflow:hidden，并给 body position:fixed + inset:0
         ——iOS Safari 只认 position:fixed 这一招，单给 overflow 仍能橡皮筋回弹，
@@ -13203,7 +13206,7 @@ html.op-fakefs #header {
     top: calc(100% + 16px + 1px + 8px);
   }
 }
-@media (orientation: landscape) and (max-height: 520px) {
+@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
   #online_play > div:not(:fullscreen):not(.op-webfs) .optips {
     display: none;
   }
