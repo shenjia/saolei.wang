@@ -199,6 +199,11 @@ export function TourEventsFeed({
                     <>
                       {e.abandoned ? (
                         <b className="comp_ev_abandoned">已弃赛</b>
+                      ) : /* 2026-11-24 张老师定：某级别未够盘数（用了保底成绩）→
+                              「未完赛」亮灰（介于金「已完赛」与暗灰「已弃赛」之间）；
+                              弃赛优先，calc 为 null 的老动态维持金色「已完赛」 */
+                      e.calc?.some((c) => c.fill > 0) ? (
+                        <b className="comp_ev_incomplete">未完赛</b>
                       ) : (
                         <b className="comp_ev_finished">{compEventText(e.type)}</b>
                       )}
