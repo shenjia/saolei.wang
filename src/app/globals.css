@@ -18130,6 +18130,11 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_rank_row { display: flex; align-items: baseline; gap: 6px; font-size: 13px; line-height: 26px; }
 .comp_rank_no { width: 20px; text-align: center; color: #939387; font-weight: 700; flex-shrink: 0; }
 .comp_rank_no.top { color: #fdc61a; }
+/* 我的名次绿色（2026-11-25 张老师需求）：前 10 命中行与 10 名后追加行同款；
+   放在 .top 之后，本人进前三时也以绿色为准 */
+.comp_rank_no.mine { color: #a6e22e; }
+/* 10 名外追加的「我」行：虚线分隔，名次/成绩沿用排行列对齐 */
+.comp_rank_mine_outside { margin-top: 5px; padding-top: 5px; border-top: 1px dashed #49483e; }
 .comp_rank_name { color: #b1b1a4; font-size: 13px; text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .comp_rank_name:hover { color: #a6e22e; }
 /* 军衔徽章小号（comp_rank_row 内压过全局 .title 尺寸，向 VideoHot 紧凑行看齐） */

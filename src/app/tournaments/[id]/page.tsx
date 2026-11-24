@@ -183,6 +183,16 @@ export default async function CompetitionDetailPage({
           ? "incomplete"
           : "finished";
 
+  // 排行榜「我的名次」（2026-11-25 张老师需求）：登录且本人有有效名次时，
+  // 已在右栏 top10 列表内的行名次染绿；不在列表内则在 10 条后追加一行名次/成绩。
+  // 用 uid 命中判「已在榜」而非 myResult.rank<=10：getTourRanking 给的是榜内
+  // 顺序号、getTourMyResult 给的是竞争排名，并列分时二者可能不同，uid 命中
+  // 才是「这条已经在页面上看得见」的真值。
+  const myRankOutside =
+    session && myResult?.rank != null && !ranking.some((r) => r.uid === session.uid)
+      ? myResult
+      : null;
+
   return (
     <div id="page" className="two_columns comp_page">
       {/* comp_detail：详情页专用钩子——主栏顶部留白（三轮 16:40 张老师定「主板块贴 header 不对」） */}
@@ -372,12 +382,13 @@ export default async function CompetitionDetailPage({
               末行总计金色。结构同 .pt_bubble 实元素气泡先例） */}
           <div className="box comp_stats">
             <h2>排行榜</h2>
-            {ranking.length > 0 ? (
+            {ranking.length > 0 || myRankOutside ? (
               <ol className="comp_rank">
                 {ranking.map((r) => {
+                  const isMe = !!session && r.uid === session.uid;
                   return (
                     <li key={r.uid} className="comp_rank_row">
-                      <span className={"comp_rank_no" + (r.rank <= 3 ? " top" : "")}>{r.rank}</span>
+                      <span className={"comp_rank_no" + (r.rank <= 3 ? " top" : "") + (isMe ? " mine" : "")}>{r.rank}</span>
                       <AvatarCell
                         id={r.uid}
                         name={r.name}
@@ -398,6 +409,23 @@ export default async function CompetitionDetailPage({
                     </li>
                   );
                 })}
+                {/* 10 名外：紧跟榜单追加「我」的一行，名次绿色、成绩同款 hover 计算气泡 */}
+                {myRankOutside && (
+                  <li className="comp_rank_row comp_rank_mine_outside">
+                    <span className="comp_rank_no mine">{myRankOutside.rank ?? "—"}</span>
+                    <span className="comp_rank_name">我</span>
+                    <b className="comp_rank_time comp_score_tip">
+                      {myRankOutside.score === null ? "—" : fmtTourScore(tourMetric, myRankOutside.score)}
+                      {myRankOutside.calc && myRankOutside.calc.length > 0 && (
+                        <TourCalcTip
+                          calc={myRankOutside.calc}
+                          metric={tourMetric}
+                          score={myRankOutside.score ?? 0}
+                        />
+                      )}
+                    </b>
+                  </li>
+                )}
               </ol>
             ) : (
               <div className="comp_section_empty">暂无排名数据</div>
