@@ -9799,21 +9799,30 @@ button.msg_cancel:hover {
    会触发系统菜单栏弹出，盖住上弹气泡（尤其信号图标的服务器清单要点点击）→
    全屏宿主内五颗图标钮与信号图标的 hover 气泡、建议切换气泡一律翻到正下方，
    小三角指向上、悬停桥同步翻到气泡上缘与按钮下缘之间；退出全屏自动还原 */
+/* 网页全屏（.op-webfs）与原生 :fullscreen 同待：浏览器顶边没有系统菜单栏，
+   但气泡翻下方更统一，且 fixed 宿主下上弹同样可能被裁 */
 #online_play > div:fullscreen .gicon .tip,
 #online_play > div:fullscreen .op_ping .tip,
-#online_play > div:fullscreen .op_ping .ping_suggest {
+#online_play > div:fullscreen .op_ping .ping_suggest,
+#online_play > div.op-webfs .gicon .tip,
+#online_play > div.op-webfs .op_ping .tip,
+#online_play > div.op-webfs .op_ping .ping_suggest {
   bottom: auto;
   top: calc(100% + 4px);
 }
 #online_play > div:fullscreen .gicon .tip::after,
 #online_play > div:fullscreen .op_ping .tip::after,
-#online_play > div:fullscreen .op_ping .ping_suggest::after {
+#online_play > div:fullscreen .op_ping .ping_suggest::after,
+#online_play > div.op-webfs .gicon .tip::after,
+#online_play > div.op-webfs .op_ping .tip::after,
+#online_play > div.op-webfs .op_ping .ping_suggest::after {
   top: auto;
   bottom: 100%;
   border-top-color: transparent;
   border-bottom-color: #656355;
 }
-#online_play > div:fullscreen .op_ping .tip::before {
+#online_play > div:fullscreen .op_ping .tip::before,
+#online_play > div.op-webfs .op_ping .tip::before {
   top: auto;
   bottom: 100%;
 }
@@ -10450,7 +10459,8 @@ html:has(#online_play) #footer {
   margin-top: auto;
 }
 /* 全屏开关：根容器全屏时补深色底（全屏默认背底为纯黑）、内容超高可滚 */
-#online_play > div:fullscreen {
+#online_play > div:fullscreen,
+#online_play > div.op-webfs {
   background: #272822;
   overflow: auto;
   /* 全屏宿主同理不画滚动条（2026-10-15 张老师定）：手动放大溢出仍可滚，只是无滚动条 */
@@ -10458,8 +10468,30 @@ html:has(#online_play) #footer {
   padding: 24px 12px;
   box-sizing: border-box;
 }
-#online_play > div:fullscreen::-webkit-scrollbar {
+#online_play > div:fullscreen::-webkit-scrollbar,
+#online_play > div.op-webfs::-webkit-scrollbar {
   display: none;
+}
+/* 网页全屏（2026-11-24 张老师定「网页全屏」开关，默认关）：全屏按钮不调
+   Fullscreen API，只在浏览器页面内把游戏根容器铺满视口——地址栏/系统菜单栏
+   仍在，不独占屏幕。z-index 100 低于 #gr_modal(150) 与全站 toast，结算浮层/
+   通知照常可见；html 上的类隐藏站头页脚并清掉窄屏整页 zoom（fixed 宿主不能
+   吃 #page 的 zoom，否则视口尺寸与 JS 的 pageZoom() 反算脱钩）。
+   退出由 JS 摘类，DOM 全链原样复原，不跨页残留 */
+html.op-webfs #header,
+html.op-webfs #footer {
+  display: none !important;
+}
+html.op-webfs body {
+  padding-top: 0 !important;
+}
+html.op-webfs body #page {
+  zoom: 1 !important;
+}
+#online_play > div.op-webfs {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
 }
 /* ---- 移动端横屏规则块在本区块靠后位置——
    媒体查询不加优先级，放前面会被后面的基础规则（如 .gzoom{display:flex}）同优先级覆盖 */
@@ -13172,7 +13204,7 @@ html.op-fakefs #header {
   }
 }
 @media (orientation: landscape) and (max-height: 520px) {
-  #online_play > div:not(:fullscreen) .optips {
+  #online_play > div:not(:fullscreen):not(.op-webfs) .optips {
     display: none;
   }
 }
@@ -18212,6 +18244,7 @@ body #header .nav li a.nav_tour_upcoming:hover,
    而不是钉屏幕底（张老师 2026-11-17 报障）。 */
 #online_play:fullscreen .bvwall,
 #online_play > div:fullscreen .bvwall,
+#online_play > div.op-webfs .bvwall,
 :fullscreen .bvwall {
   position: fixed;
   left: 12px;
