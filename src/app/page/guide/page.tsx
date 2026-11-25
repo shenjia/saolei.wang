@@ -22,7 +22,6 @@ const GROUPS: [string, [string, string, number | null, string?, string?][]][] = 
       ["扫雷术语介绍", "张砷镓", null, "/page/help/word"],
       ["扫雷定式及其变化", "张砷镓", 362],
       ["关于数字1-7周围8格中雷的分布的各种形状", "杨萧杨", 8243],
-      ["新手向教学：综合实力提升", "龚浩然", 21006],
       ["新手判雷上路（一）——初步认识减法公式及其衍生定式", "张少武", null, undefined, "https://zhuanlan.zhihu.com/p/27439584"],
       ["新手判雷上路（二）——121和1221定式变形", "张少武", null, undefined, "https://zhuanlan.zhihu.com/p/27550382"],
     ],
