@@ -2138,7 +2138,11 @@ del[data-tip]:hover::after {
 .bbs_content {
   padding: 10px 4px;
   line-height: 1.8;
-  word-break: break-all;
+  /* 2026-11-25 张老师：英文单词换行不得从中间切断（community→commun/ity、
+     cheaters→che/aters）。break-all 按字符硬断，改 normal + anywhere：
+     英文按空格整词换行；超长 URL / 连续全角标点仍可必要时断行兜底（同 star_speech） */
+  word-break: normal;
+  overflow-wrap: anywhere;
   /* 2026-09-23 张老师：正文颜色先从基础 #636359 提到 #f8f8f2 被反馈太亮，
      改用 2008 版论坛正文色 #bbbbbb（淡一档）+ 字号加大 */
   color: #bbbbbb;
