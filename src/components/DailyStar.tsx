@@ -23,6 +23,9 @@ import ClickTracker from "@/components/ClickTracker";
 // 关注系统（2026-11-18）：头像 hover 关注按钮
 import { AvatarFollowBtn } from "@/components/AvatarFollowBtn";
 import { isFollowing } from "@/lib/follow";
+// 非 sub50 当选者改显进步数据（2026-11-26 张老师定）：榜内名次与 30 天窗口名次差
+import { getGrowRankOfUsers, getSumTimeDeltas } from "@/lib/ranksnap";
+import { TITLE_THRESHOLDS } from "@/lib/config";
 
 export async function DailyStar() {
   // 先取 session（getTodayStar 带上 viewer，SSR 顺带查出 myVote——跨设备一致的已投态）
@@ -37,6 +40,23 @@ export async function DailyStar() {
   const manager = !!session && isManager(session.role);
   // 观看者对该星的已关注态（hover 关注按钮初始态；唯一索引点查）
   const viewerFollowing = session && !own ? await isFollowing(session.uid, card.id) : false;
+  // 进步展示改版（2026-11-26 张老师定）：无 sub50（高级时间 > 少将档 50000ms，与评选①路
+  // MAJOR_GENERAL_MS 同口径）不展示地区/全国排名，改显「进步榜第x名」+「排名上升xxx位」。
+  // 榜内名次走 getGrowRankOfUsers（与 /grow 进步榜完全同口径），上升位数千走 getSumTimeDeltas
+  // （预计算 delta，封禁修正后口径）。sub50 当选者维持原地区/全国排名展示。
+  const expMs = card.scores.exp_time?.score ?? 0;
+  const isSub50 = expMs > 0 && expMs <= TITLE_THRESHOLDS[5];
+  let growRank: number | null = null;
+  let growDelta: number | null = null;
+  if (!isSub50) {
+    const [rankMap, deltaMap] = await Promise.all([
+      getGrowRankOfUsers([card.id]),
+      getSumTimeDeltas([card.id]),
+    ]);
+    growRank = rankMap.get(card.id) ?? null;
+    const d = deltaMap.get(card.id);
+    growDelta = d !== null && d !== undefined && d > 0 ? d : null;
+  }
   // 感言双渲染（2026-11-13 张老师定）：移动版放头像右侧排名下方（star_right 内），
   // 桌面版保持 star_body 下方通栏（九轮口径）；CSS 按 881/880 断点互斥显隐。
   // StarSpeechVote/DeleteButton 均无固定 id，双实例互不干扰（同时只有一份可见）。
@@ -113,7 +133,18 @@ export async function DailyStar() {
           <p className="star_title">
             <TitleBadge title={card.militaryTitle} classic={card.classicTitle} link />
           </p>
-          {/* 排名行：与用户主页 .ranks 同构（海外玩家同口径组内名次，2026-10-15） */}
+          {/* 排名行（2026-11-26 改版）：无 sub50 者不显地区/全国排名，
+              改显进步榜名次 + 上升位数千（两者都拿不到时回退原展示） */}
+          {!isSub50 && growRank !== null && growDelta !== null ? (
+            <div className="ranks">
+              <span className="rank_line">
+                进步榜第 <em>{growRank}</em> 名
+              </span>
+              <span className="rank_line">
+                排名上升 <em>{growDelta}</em> 位
+              </span>
+            </div>
+          ) : (
           <div className="ranks">
             {card.area === AREA_OVERSEAS ? (
               card.areaPos !== null ? (
@@ -142,6 +173,7 @@ export async function DailyStar() {
               </>
             )}
           </div>
+          )}
           {/* 移动版感言：头像右侧、排名下方（2026-11-13 张老师定；≤880 显示） */}
           {star.speech && (
             <p className="star_speech star_speech_mob">{speechBlock}</p>
