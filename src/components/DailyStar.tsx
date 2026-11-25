@@ -143,7 +143,7 @@ export async function DailyStar() {
                 进步榜第 <em>{growRank}</em> 名
               </span>
               <span className="rank_line">
-                排名上升 <em className="star_delta_up"><DeltaArrow dir="up" />{growDelta}</em>
+                本月排名 <em className="star_delta_up"><DeltaArrow dir="up" />{growDelta}</em>
               </span>
             </div>
           ) : (
