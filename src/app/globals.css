@@ -17855,7 +17855,9 @@ body #header .nav li a.nav_tour_upcoming:hover,
   background: #1e1f1c; border: 1px solid #49483e; border-radius: 4px;
   padding: 6px 10px; font-size: 12px; line-height: 18px; color: #b1b1a4;
   white-space: normal; opacity: 0; visibility: hidden; transition: opacity 0.15s;
-  pointer-events: none; z-index: 950; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+  /* 2026-11-25 张老师报 BUG：详情页首屏气泡上缘被固定页头（body #header z1100）压住；
+     仅本气泡提到 1101，保持朝上版式且不遮导航文字（其他气泡层级不动） */
+  pointer-events: none; z-index: 1101; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
 }
 .comp_tip::after {
   content: ""; position: absolute; top: 100%; right: 60px; left: auto; margin-left: 0;
