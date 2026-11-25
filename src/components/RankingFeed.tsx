@@ -78,7 +78,8 @@ export function RankingFeed(props: RankingFeedProps) {
   );
   const [batchStep, setBatchStep] = useState(0); // 递增批量序号（驱动按钮文案，换页重置）
   const pageCache = useRef(new PageCache<TitledRow[]>()); // 页号 → 行数据（LRU≤30）
-  const reqSeq = useRef(0); // 在途请求序号（松手立即加载的并发护栏）
+  const reqSeq = useRef(0); // 在途请求序号（所有拉页操作共用的并发护栏）
+  const locatingRef = useRef(false); // 定位同步护栏（state 更新异步，挡不住连点/连续搜索）
 
   const maxPage = Math.max(1, Math.ceil(total / pageSize));
 
@@ -193,8 +194,10 @@ export function RankingFeed(props: RankingFeedProps) {
       // 加载即翻页（2026-11-12 张老师定，同全站 Feed）：当前页码 +1 指向新加载的
       // 首个新页并滚动定位到新页首行——否则数据追加在视口外、页码停在原页，
       // 观感是「点加载更多页面没变」。
+      // 追加前按 id 去重（2026-11-25 重复名次事故兜底）：任何两路请求撞同一页时，
+      // 宁可丢掉重复行也不能让同一名次在表里出现两次。
       flushSync(() => {
-        setRows((prev) => [...prev, ...data.rows]);
+        setRows((prev) => appendUniqueRows(prev, data.rows));
       });
       scrollToRow(data.rows[0].id);
       setCurPage(reqPage);
@@ -227,18 +230,20 @@ export function RankingFeed(props: RankingFeedProps) {
   // ① 已加载 → 滚动；② 30 页内 → 并发拉取后滚动；③ 更远 → 跳 whereami 整页导航
   // 落地后该行持续高亮（hlUid），玩家名变黄
   async function locateRow(uid: number) {
-    if (locating) return;
+    if (locating || locatingRef.current) return;
     setHlUid(uid);
     // 搜索等待气泡（2026-10-27 张老师要求）：RankingNav 定位前已 toastLoading()；
     // 本流程「不跳转」的分支（已加载行滚动 / 拉到缺页后滚动）在 finally 里收气泡，
     // 走 jumpToWhereami 的整页导航由 URL 变化自动渐隐（navigated 标记区分）
     let navigated = false;
+    let fetchSeq = 0;
     if (scrollToRow(uid)) {
       toastLoadingDone();
       return;
     }
     const targetPage = Math.ceil(((rowRankById(rows, uid) as number | undefined) ?? 0) / pageSize);
     void targetPage; // 行 rank 未知时按页数并发探测
+    locatingRef.current = true;
     setLocating(true);
     try {
       const nextPageNum = nextPage.current;
@@ -289,7 +294,14 @@ export function RankingFeed(props: RankingFeedProps) {
       const from = Math.floor(lastLoadedRank / pageSize) + 1;
       const pages: number[] = [];
       for (let p = from; p <= page; p++) pages.push(p);
+      // 并发护栏（2026-11-25 重复名次事故）：「加载更多」/滑条翻页与搜索定位可能
+      // 同时盯上同一页。这里必须占用全局 reqSeq 作废旧请求——旧请求自身只会检查
+      // 它发时的序号，不知道定位已经开始，落地后照样 append 一次 → 整段名次重复两遍
+      // （实证：第 29 页 561–580 连出两次，表格 60 行）。被作废的请求不再收 loading，
+      // 由本流程 finally 统一收。
+      fetchSeq = ++reqSeq.current;
       const datas = await Promise.all(pages.map(fetchPage));
+      if (fetchSeq !== reqSeq.current) return; // 已有更新的拉页操作，丢弃本次结果
       const newRows: TitledRow[] = [];
       const newDeltas: [number, number | null][] = [];
       for (const d of datas) {
@@ -299,7 +311,7 @@ export function RankingFeed(props: RankingFeedProps) {
       // flushSync 强制同步提交——rAF 可能先于 React commit 触发，导致新行未上屏就滚动失败
       // （2026-10-13 实证：搜索定位拉取缺失页后报「未找到该玩家的位置」）
       flushSync(() => {
-        setRows((prev) => [...prev, ...newRows]);
+        setRows((prev) => appendUniqueRows(prev, newRows));
         if (newDeltas.length) {
           setDeltas((prev) => {
             const m = prev ? new Map(prev) : new Map();
@@ -318,7 +330,11 @@ export function RankingFeed(props: RankingFeedProps) {
       navigated = true;
       jumpToWhereami(uid);
     } finally {
+      locatingRef.current = false;
       setLocating(false);
+      // 作废掉在途「加载更多」时它自己不会收 loading（序号已过期），这里补收；
+      // 若期间又有更新的拉页请求接管，则保持 loading 交给那个请求收。
+      if (fetchSeq && fetchSeq === reqSeq.current) setLoading(false);
       if (!navigated) toastLoadingDone();
     }
   }
@@ -394,4 +410,17 @@ export function RankingFeed(props: RankingFeedProps) {
 
 function rowRankById(rows: RankingRow[], id: number): number | undefined {
   return rows.find((r) => r.id === id)?.rank;
+}
+
+/** 追加行按 id 去重（2026-11-25 重复名次事故兜底）：两路拉页撞同一页时只保留先到的一批。
+ *  次序保持「旧行在前、新行在后」——递增批量的窗口语义与 rank 渲染都依赖这个顺序。 */
+function appendUniqueRows(prev: TitledRow[], incoming: TitledRow[]): TitledRow[] {
+  const known = new Set(prev.map((r) => r.id));
+  const added: TitledRow[] = [];
+  for (const row of incoming) {
+    if (known.has(row.id)) continue;
+    known.add(row.id);
+    added.push(row);
+  }
+  return added.length ? [...prev, ...added] : prev;
 }
