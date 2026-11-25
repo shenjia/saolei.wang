@@ -18042,6 +18042,27 @@ body #header .nav li a.nav_tour_upcoming:hover,
 @media (max-width: 768px) {
   .comp_video_scroll { overflow-x: auto; }
 }
+/* 比赛录像表移动端瘦身影藏次要列（2026-11-26 00:16 张老师：至少让比赛关注的列
+   ——如惜步杯 Crossings——默认可见，不用滑动）：比赛表（tourMetric 模式）列序列
+   上传者/软件/级别/成绩/3BV/计分项/评论点击/上传时间，窄屏把「软件」「评论/点击」
+   「上传时间」三列整体影藏，计分项列进入首屏；其余列（含上传者/成绩/3BV）不动。
+   只限 .comp_video_table（比赛详情页），首页 #video/#user_videos 的既有瘦身影藏
+   规则不受影响。渲染层仍输出这些格（数据在横滑区滑出去看 SQL 无关），纯 CSS 隐藏 */
+@media (max-width: 768px) {
+  .comp_video_table th.c.sw,
+  .comp_video_table td.c.sw,
+  .comp_video_table th:nth-last-child(2),
+  .comp_video_table td.counters,
+  .comp_video_table th:nth-last-child(1),
+  .comp_video_table td.create_time {
+    display: none;
+  }
+  /* 影藏列后 .video_table 的 890px min-width 会继续撑出横滑（同 #video/#user_videos
+     判例 8346 行），收回自然宽度——计分项列进入首屏、表格不再横滑 */
+  .comp_video_scroll .comp_video_table {
+    min-width: 0;
+  }
+}
 
 /* 比赛计分项列（2026-11-22 张老师需求：计分项非 time/3bv/s/stnb 时录像表 3BV/s+STNB
    两列替换为一列——惜步杯显 Crossings）。数字加粗与数字列同语言，表头居中由 th.c 覆盖 */
