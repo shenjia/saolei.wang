@@ -91,3 +91,37 @@ export async function checkRecordExempt(
     return NO_RECORD;
   }
 }
+
+/**
+ * 首页发现流「纪录盘保位」预判定（2026-11-25 张老师定）：
+ * 本盘若此刻立即过审，是否会刷新 user_scores(_nf) 的 time / 3bvs 指针。
+ *
+ * 口径与 review.ts:userScoresOnInsert 严格同源——只比 time / 3bvs，
+ * 不含 STNB（纪录盘保位本来就是那 12 个 *_video 指针的逻辑，STNB 无独立指针）；
+ * 判定失败一律按「非纪录盘」保守处理，不因查询故障放开保位名额。
+ * 运气盘（no_record）由调用方拦掉——过审都不走成绩分支，恒不写指针。
+ * 只查询、不写库、不碰 status。
+ */
+export async function checkFeedRecordEligible(
+  uid: number,
+  level: VideoLevel,
+  noflag: boolean,
+  bbbv: number,
+  timeMs: number
+): Promise<boolean> {
+  try {
+    const s = videoScores(bbbv, timeMs, level);
+    const scores = await (prisma[`userScores${noflag ? "Nf" : ""}`] as unknown as ScoresDelegate).findUnique({
+      where: { id: BigInt(uid) },
+      select: { [`${level}Time`]: true, [`${level}3bvs`]: true },
+    });
+    const curTime = scores ? Number(scores[`${level}Time`] ?? 0) : 0;
+    const cur3bvs = scores ? Number(scores[`${level}3bvs`] ?? 0) : 0;
+    // 与 userScoresOnInsert 两处 if 逐字同口径（含 curTime=0 的首次写入语义）
+    const timeBetter = curTime === 0 || s.time < curTime;
+    const bvsBetter = s["3bvs"] > 0 && (cur3bvs === 0 || s["3bvs"] > cur3bvs);
+    return timeBetter || bvsBetter;
+  } catch {
+    return false;
+  }
+}

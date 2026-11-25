@@ -29,7 +29,7 @@ import { userTitleSnapshot } from "@/lib/queries";
 import { isMaintenanceOn, maintenanceReject } from "@/lib/maintenance";
 import { getRankPenalty, countRecentUploads, LOW_TRUST_UPLOAD_LIMIT } from "@/core/src/lib/anticheat";
 import { countWeeklyUploads, weeklyUploadLimit, sumDonateCents } from "@/core/src/lib/anticheat";
-import { checkRecordExempt } from "@/lib/record-exempt";
+import { checkFeedRecordEligible, checkRecordExempt } from "@/lib/record-exempt";
 
 const VIDEOS_ROOT = path.join(process.cwd(), "videos");
 const MAX_SIZE = 500 * 1024; // 旧版 plupload max_file_size: 500kb
@@ -251,6 +251,18 @@ export async function uploadVideo(
     );
   }
 
+  /* 首页发现流「纪录盘保位」预标记（2026-11-25 张老师定）：待审破纪录盘与已审一样
+     不占 (用户,级别) 3 盘配额。判据按「若此刻立即过审会刷新 user_scores(_nf) 的
+     time/3bvs 指针」算（与 review.ts:userScoresOnInsert 严格同源，不含 STNB——
+     纪录盘保位本来只看 12 个 *_video 指针），落 record_pending=1，过审后随 status
+     变化自动失效、由审核写入的真实指针接管。运气盘过审都不走成绩分支，恒 0。
+     判定失败保守按非纪录盘（不白送保位名额）；多两次主键查询，开销可忽略。 */
+  const recordPending =
+    !noRecord &&
+    (await checkFeedRecordEligible(session.uid, level, parsed.noflag, parsed.bbbv ?? 0, parsed.timeMs))
+      ? 1
+      : 0;
+
   // 存文件：videos/Y/M/D/hash.ext（旧版存 videos/Y/m/d/hash.avf，新版按真实扩展名）
   const now = new Date();
   const nowSec = BigInt(Math.floor(now.getTime() / 1000));
@@ -319,6 +331,7 @@ export async function uploadVideo(
           ranked: snap.ranked ? BigInt(1) : BigInt(0),
           firstBv,
           pbBv,
+          recordPending,
           // 来源合作方标记（2026-11-12 元扫雷上传）：from_site=api_key.id，
           // 详情页「来自XX」；from_id 不写（那是外站同步的幂等键，NULL 不参与唯一约束）
           ...(options?.fromSite ? { fromSite: BigInt(options.fromSite) } : {}),

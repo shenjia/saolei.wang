@@ -285,6 +285,14 @@ model Video {
   firstBv Int @default(0) @map("first_bv") @db.TinyInt
   pbBv    Int @default(0) @map("pb_bv") @db.TinyInt
 
+  // ---- 首页发现流「纪录盘保位」预标记（2026-11-25 张老师定）----
+  // 上传时刻判定「若本盘立即过审会刷新 user_scores(_nf) 的 time/3bvs 指针」（口径
+  // 与 review.ts:userScoresOnInsert 同源，不含 STNB——纪录盘保位本来就只看 12 个
+  // *_video 指针）。待审 status=10 期间视同纪录盘：不进 (用户,级别) 配额窗口、
+  // UNION ALL 直通；过审后指针由审核管线接管，本标记随 status≠10 自动失效，
+  // 屏蔽行本就不进流。运气盘（no_record=1）过审都不写指针，恒 0。
+  recordPending Int @default(0) @map("record_pending") @db.TinyInt
+
   // ---- 外站同步来源（2026-11-07 张老师定）：from_site=api_key.id；NULL=站内原生上传 ----
   // ①防递归：开源站按 video_list(id>cursor) 轮询抓雷网录像，外站同步落库的录像
   //   id 恒大于其游标水位，必须在轮询通道按调用方 key 过滤掉自家来源（video_list 路由内实现）；
@@ -317,6 +325,8 @@ model Video {
   @@index([level, createTime])
   @@index([user, level])
   @@index([hash])
+  // 首页发现流待审纪录盘预标记筛选（status=10 AND record_pending=1）
+  @@index([status, recordPending])
   @@index([createTime])
   // (competition_id, create_time) 2026-11-13：比赛详情页「录像」板块按比赛取行
   // （正序时间序扫描）+ 后台按比赛筛选

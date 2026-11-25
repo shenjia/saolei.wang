@@ -1665,9 +1665,13 @@ export async function getVideoFeed(opts: {
  *  60s 兜底（[level,nf,page,base,limit] 键空间），首页第一页进 scripts/preheat.sh；
  *  冷页偶发一次重建（stale-while-revalidate 不阻塞请求）。 */
 
-/** 纪录盘 id 集合子查询：user_scores / user_scores_nf 各 6 个 *_video 指针列
- *  （beg/int/exp × time/3bvs），指向即「当前有效个人最好成绩」——审核管线自动维护
- *  （破纪录换指针、屏蔽撤纪录清指针），无需独立清理任务。 */
+/** 纪录盘 id 集合子查询，两路同源（2026-11-25 张老师定）：
+ *  ① 已审：user_scores / user_scores_nf 各 6 个 *_video 指针列（beg/int/exp ×
+ *     time/3bvs），指向即「当前有效个人最好成绩」——审核管线自动维护（破纪录换
+ *     指针、屏蔽撤纪录清指针），无需独立清理任务。
+ *  ② 待审：video.record_pending=1（上传时按「若立即过审会刷新上述指针」判定落标），
+ *     让未审核的破纪录盘同样不占 (用户,级别) 配额；过审后 status≠10 本路自动退出，
+ *     无缝交给 ① 接管，屏蔽行 status=0 两路都不进。 */
 const PB_VIDEO_IDS_SQL = `SELECT id FROM (
   SELECT beg_time_video AS id FROM user_scores WHERE beg_time_video IS NOT NULL
   UNION SELECT beg_3bvs_video FROM user_scores WHERE beg_3bvs_video IS NOT NULL
@@ -1681,6 +1685,7 @@ const PB_VIDEO_IDS_SQL = `SELECT id FROM (
   UNION SELECT int_3bvs_video FROM user_scores_nf WHERE int_3bvs_video IS NOT NULL
   UNION SELECT exp_time_video FROM user_scores_nf WHERE exp_time_video IS NOT NULL
   UNION SELECT exp_3bvs_video FROM user_scores_nf WHERE exp_3bvs_video IS NOT NULL
+  UNION SELECT id FROM video WHERE status = ${VIDEO_STATUS.NORMAL} AND record_pending = 1
 ) pb`;
 
 /** 录像行有效评定高级时间的 SQL 表达（与 assess.promotedExpTime 严格同语义，2026-10-28
@@ -1733,8 +1738,8 @@ const fetchFeedDedupIdsImpl = async (
   const viJoin = needsVi ? ` JOIN video_info vi ON vi.id = v.id${nf ? " AND vi.noflag = 1" : ""}` : "";
   const stCond = stage !== "" ? videoStageCond(stage) : "";
   const quota = FEED_USER_LEVEL_QUOTA;
-  // 2026-10-23：status 过滤放宽 <>0（待审放行进首页流，屏蔽仍挡）——待审盘无
-  // user_scores 指针、必不在纪录盘集合，自然走配额分支
+  // 2026-10-23：status 过滤放宽 <>0（待审放行进首页流，屏蔽仍挡）；2026-11-25 起
+  // 待审破纪录盘由 record_pending 进纪录盘集合直通，其余待审盘照常走配额分支
   const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(`
     SELECT f.id FROM (
       SELECT q.id, q.create_time FROM (
@@ -1752,8 +1757,9 @@ const fetchFeedDedupIdsImpl = async (
   `);
   return rows.map((r) => N(r.id));
 };
-// 2026-11-09 登录态实时化：salt 进键（访客 "" = 原键空间），缓存条目复用原实现（v3 逻辑零变化）
-const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v4"], {
+// 2026-11-09 登录态实时化：salt 进键（访客 "" = 原键空间）；2026-11-25 纪录盘集合
+// 并入待审 record_pending（SQL 口径变更），键升 v5 避免部署后命中旧缓存结果
+const fetchFeedDedupIds = unstable_cache(fetchFeedDedupIdsImpl, ["feed-dedup-v5"], {
   revalidate: REVALIDATE_HOME_CACHE,
   // 审核联动（2026-11-09）：一键过/屏蔽后审核收口 revalidateTag("home-video-feed")
   // 即时打脏 + kick 预热重建，不等 300s TTL（屏蔽录像最长 5 分钟仍挂首页的根因）
@@ -1789,8 +1795,8 @@ const fetchFeedDedupCountImpl = async (
   `);
   return N(rows[0]?.c);
 };
-// v4：2026-11-09 登录态实时化（salt 进键，同 feed-dedup-v4）
-const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup-count-v4"], {
+// v5：2026-11-25 纪录盘集合并入待审 record_pending（同 fetchFeedDedup-v5）
+const fetchFeedDedupCount = unstable_cache(fetchFeedDedupCountImpl, ["feed-dedup-count-v5"], {
   revalidate: REVALIDATE_HOME_CACHE,
   tags: ["home-video-feed"], // 同 fetchFeedDedupIds：审核收口即时打脏
 });
