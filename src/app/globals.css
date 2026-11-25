@@ -5505,6 +5505,15 @@ body #page.ranking_old .ranking_box {
   font-weight: bold;
   font-style: normal;
 }
+/* 非 sub50 当选者的进步行（2026-11-26 张老师定）：上升数字绿色+上箭头（进步排行同款） */
+#daily_star .ranks .rank_line em.star_delta_up {
+  color: #a6e22e;
+}
+#daily_star .ranks .rank_line em.star_delta_up svg.d_arrow {
+  display: inline-block;
+  vertical-align: -1px;
+  margin-right: 2px;
+}
 #daily_star .ranks .star_null {
   color: #75715e;
 }

@@ -26,6 +26,8 @@ import { isFollowing } from "@/lib/follow";
 // 非 sub50 当选者改显进步数据（2026-11-26 张老师定）：榜内名次与 30 天窗口名次差
 import { getGrowRankOfUsers, getSumTimeDeltas } from "@/lib/ranksnap";
 import { TITLE_THRESHOLDS } from "@/lib/config";
+// 上升箭头（与排行表升降列同款小三角）
+import { DeltaArrow } from "@/components/RankingRows";
 
 export async function DailyStar() {
   // 先取 session（getTodayStar 带上 viewer，SSR 顺带查出 myVote——跨设备一致的已投态）
@@ -141,7 +143,7 @@ export async function DailyStar() {
                 进步榜第 <em>{growRank}</em> 名
               </span>
               <span className="rank_line">
-                排名上升 <em>{growDelta}</em> 位
+                排名上升 <em className="star_delta_up"><DeltaArrow dir="up" />{growDelta}</em>
               </span>
             </div>
           ) : (
