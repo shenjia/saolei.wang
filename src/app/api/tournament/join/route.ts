@@ -12,6 +12,7 @@ import { prisma } from "@/lib/db";
 import { addTourEvent, TOUR_EVENT_PLAYER_JOIN, tourStatus } from "@/lib/tournament";
 import { publishNews } from "@/lib/news";
 import { NEWS_TYPE } from "@/lib/config";
+import { canPost } from "@/lib/bbs";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -41,6 +42,16 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { ok: false, error: st === "active" ? "比赛已开始，无法报名" : "比赛已结束，无法报名" },
       { status: 400 }
+    );
+  }
+
+  // 报名资格闸（2026-11-26 张老师定）：未加入排行不得报名——判据沿用 canPost
+  // （user_scores 四项成绩时间全 0 = 未入榜，与论坛/UGC「未上榜」同源），
+  // 两个报名入口（列表 TourSignupButton、详情 SignupEntryBox）均把 error 用红气泡显示
+  if (!(await canPost(session.uid))) {
+    return NextResponse.json(
+      { ok: false, error: "请先加入排行，再报名参加比赛" },
+      { status: 403 }
     );
   }
 
