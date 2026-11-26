@@ -38,6 +38,7 @@ import { ensureVideoBoard } from "@/lib/videometrics";
 // 综合评级的等级配色（与雷达图同一份，统一在 videoscore.ts 维护）
 import { gradeColor } from "@/lib/videoscore";
 import { VIDEO_STATUS } from "@/lib/config";
+import { findTourByCodeInWindow } from "@/lib/tournament";
 
 export const dynamic = "force-dynamic";
 
@@ -113,7 +114,8 @@ export default async function VideoViewPage({
   // 比赛量小（十场量级）且 code 有唯一索引，单次查询开销可忽略。
   // 2026-11-19 张老师需求：挂接关系（video.tournament_id）优先——上传自动分拣
   // （签名末尾命中，race 为 NULL）与后台手动挂接的录像同样要显示比赛链接；
-  // race 反查仅作未挂接盘的兜底。
+  // race 反查仅作未挂接盘的兜底；2026-11-26 张老师定：反查必须校验时间窗口，
+  // 赛后忘改标识的录像（如比赛结束后仍带 G11479）不再识别成比赛录像，只显原始标识。
   const linkedComp = video.tournamentId
     ? await prisma.tournament.findUnique({
         where: { id: BigInt(video.tournamentId) },
@@ -122,10 +124,7 @@ export default async function VideoViewPage({
     : null;
   const raceComp =
     !linkedComp && video.race
-      ? await prisma.tournament.findUnique({
-          where: { code: video.race },
-          select: { id: true, shortName: true },
-        })
+      ? await findTourByCodeInWindow(video.race, Number(video.createTime))
       : null;
   const raceCompShown = linkedComp ?? raceComp;
 

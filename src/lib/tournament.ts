@@ -1554,6 +1554,20 @@ export async function matchTourByRace(
   return null;
 }
 
+/** 比赛标识反查（**展示兜底专用**，2026-11-26 张老师定）：录像上传时刻必须落在
+ *  比赛窗口内才认比赛——赛后玩家常忘改标识，窗外只显示原始标识文本，不识别成比赛录像。
+ *  权威挂接关系（video.tournament_id）不走此兜底，后台手动挂接的窗外历史盘照常展示。 */
+export async function findTourByCodeInWindow(
+  code: string,
+  createTimeSec: number
+): Promise<{ id: bigint; shortName: string } | null> {
+  const ts = BigInt(Math.floor(createTimeSec));
+  return prisma.tournament.findFirst({
+    where: { code, startTime: { lte: ts }, endTime: { gte: ts } },
+    select: { id: true, shortName: true },
+  });
+}
+
 /** 个人会话标识判据（共用）：race 命中**未过期**会话且上传时刻在会话窗内 → 返回比赛 id。
  *  抽出复用于两个入口（2026-11-22 408465 案张老师定）：race 字段（EVF 内嵌）+
  *  签名末尾（Arbiter AVF 无 race 字段，窗口赛玩家只能把个人标识写进署名末尾）。 */
