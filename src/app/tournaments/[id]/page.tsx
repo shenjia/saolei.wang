@@ -4,6 +4,7 @@
 // · 其下「动态」「录像」两个板块：
 //   动态＝报名开始 / 玩家报名参加 / 比赛正式开始 / 玩家更新成绩 / 比赛正式结束
 //   （开始/结束事件由列表页与详情页渲染期惰性补写，见 ensureTourLifecycleEvents）；
+//   动态支持按玩家搜索（2026-11-26 张老师需求，复用排行页搜索框）：?eauthor=<uid>，查询层过滤；
 //   录像＝本比赛全部参赛录像按上传时间逆序（新在前，2026-11-22 张老师定），行渲染与首页录像流同源
 //   （VideoRows），按比赛过滤、不去重；
 // · 右栏：标准玩家卡片（UserPanel）+ 我的成绩 + 最新排名 + 数据统计。
@@ -103,6 +104,9 @@ export default async function CompetitionDetailPage({
   // 动态筛选（2026-11-23 张老师需求）：ef=finished 只看完赛、ef=follow 只看我关注的人，
   // 缺省/非法值回全部；与页码 ep 同为 URL 状态，两板块跳转互带。
   const eventsFilter: TourEventsFilter = parseTourEventsFilter(sp.ef);
+  // 动态按玩家搜索（2026-11-26 张老师需求）：eauthor=玩家 id（与录像区 vauthor 同形态），
+  // 查询层限定该玩家的动态；首屏从搜索框选中后写 URL，换页/加载更多均透传。
+  const eventsAuthor = Math.max(parseInt(sp.eauthor ?? "", 10) || 0, 0) || undefined;
   // 两板块共用的 URL 基底：完整带上当前所有参数（含对方页码与动态筛选），
   // 换页/切筛选时由各客户端壳覆盖自己管辖的键（动态壳覆盖 ep/ef，录像搜索覆盖 page
   // 与 vauthor/vtime/3bv），避免任一路径把其他维度冲掉。
@@ -129,10 +133,11 @@ export default async function CompetitionDetailPage({
   const tourVideoLevels = c.levels.filter((l): l is VideoLevel =>
     (VIDEO_LEVELS as readonly string[]).includes(l)
   );
-  const [events, videos, ranking, dstats, myResult, searchUser] = await Promise.all([
+  const [events, videos, ranking, dstats, myResult, searchUser, eventAuthor] = await Promise.all([
     getTourEventsPage(compId, ep, TOUR_EVENT_PAGE_SIZE, {
       filter: eventsFilter,
       viewerId: session?.uid,
+      userId: eventsAuthor,
     }),
     getTourVideosPage(compId, vp, COMP_VIDEO_PAGE_SIZE, {
       author: vAuthor,
@@ -147,6 +152,10 @@ export default async function CompetitionDetailPage({
     session ? getTourMyResult(compId, session.uid) : Promise.resolve(null),
     vAuthor
       ? prisma.user.findUnique({ where: { id: BigInt(vAuthor) }, select: { chineseName: true } })
+      : Promise.resolve(null),
+    // 动态搜索框回显姓名（选中搜索项即写 URL，SSR/刷新后输入框仍显示该玩家）
+    eventsAuthor
+      ? prisma.user.findUnique({ where: { id: BigInt(eventsAuthor) }, select: { chineseName: true } })
       : Promise.resolve(null),
   ]);
   // 计分数据项（2026-11-21 多数据项）：详情页成绩展示按项格式化
@@ -208,7 +217,7 @@ export default async function CompetitionDetailPage({
               initial 不重置」，同 VideoListFeed key=author-time 判例） */}
           <div className="box comp_section">
             <TourEventsFeed
-              key={`ep${ep}-vp${vp}-ef${eventsFilter}`}
+              key={`ep${ep}-vp${vp}-ef${eventsFilter}-ea${eventsAuthor ?? 0}`}
               compId={compId}
               scoreMetric={tourMetric}
               scoreDesc={tourDesc}
@@ -220,6 +229,8 @@ export default async function CompetitionDetailPage({
               pageSize={TOUR_EVENT_PAGE_SIZE}
               filter={eventsFilter}
               loggedIn={!!session}
+              author={eventsAuthor}
+              authorName={eventAuthor?.chineseName ?? ""}
               otherParams={otherParams}
             />
           </div>

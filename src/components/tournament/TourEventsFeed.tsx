@@ -6,7 +6,9 @@
 // · 「···加载更多」→ GET /api/tournament/[id]/events?page=1&size=前缀长度
 //   （动态最新在前、新事件会插到头部，前缀整批替换即「加载后最新快照」，无重复无跳行）；
 //   hasMore 按「已加载 < total」判；
-// · 首屏数据由服务端 RSC 传入（SSR 可见、无 JS 降级仍能看首屏与 URL 换页）。
+// · 首屏数据由服务端 RSC 传入（SSR 可见、无 JS 降级仍能看首屏与 URL 换页）；
+// · 按玩家搜索（2026-11-26）：标题行搜索框复用排行页 .goto_form 样式与模糊推荐逻辑，
+//   选中写 URL ?eauthor=<uid>，翻页/加载更多/切筛选/录像区搜索均透传，清除只删该参数。
 
 "use client";
 
@@ -21,6 +23,7 @@ import { DeltaArrow } from "@/components/RankingRows";
 import { compEventText, type TourEventRow, type TourEventsFilter } from "@/lib/tournament";
 import { fmtTourScore, type TourMetricKey } from "@/lib/tour-metric";
 import { TourCalcTip } from "@/components/tournament/TourCalcTip";
+import { TourEventsSearch } from "@/components/tournament/TourEventsSearch";
 import { replaceWithoutJump } from "@/components/useNoJump";
 
 export function TourEventsFeed({
@@ -38,6 +41,10 @@ export function TourEventsFeed({
   /** 动态筛选（2026-11-23 张老师需求）：URL ?ef=，服务端已按此过滤 */
   filter,
   loggedIn,
+  /** 动态按玩家搜索（2026-11-26 张老师需求）：URL ?eauthor=<uid>，查询层已过滤 */
+  author,
+  /** 搜索框回显姓名（服务端按 uid 现查；空串=未搜索） */
+  authorName,
   /** 其余 URL 参数（录像页码/搜索/级别/排序等）：动态翻页与切筛选时原样带住，
    *  避免「选了录像筛选再翻动态页就丢筛选」——与录像侧 tourParts 同口径 */
   otherParams,
@@ -53,6 +60,8 @@ export function TourEventsFeed({
   scoreDesc: boolean;
   filter: TourEventsFilter;
   loggedIn: boolean;
+  author?: number;
+  authorName?: string;
   otherParams: Record<string, string | undefined>;
 }) {
   const router = useRouter();
@@ -74,13 +83,17 @@ export function TourEventsFeed({
   /** 动态板块跳转 URL（换页/切筛选共用）：基底带住录像区筛选与页码，
    *  ep/ef 由本板块接管；切筛选一律 p=1（否则筛选后条数变少会停在空白页）。
    *  base 一律 usePathname()——代号 URL 进入后不能把 pathname 改成数字 id（跳动铁律）。 */
-  function eventsUrl(extra: { p?: number; filter?: TourEventsFilter }): string {
+  function eventsUrl(extra: { p?: number; filter?: TourEventsFilter; author?: number | null }): string {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(otherParams)) {
       if (v !== undefined && v !== "") params.set(k, v);
     }
     if (videosPage > 1) params.set("page", String(videosPage));
     else params.delete("page");
+    // 玩家搜索态由本板块接管（选中/清除时显式覆盖，翻页/切筛选照常带住）
+    const a = extra.author === undefined ? author : extra.author;
+    if (a && a > 0) params.set("eauthor", String(a));
+    else params.delete("eauthor");
     const p = extra.p ?? 1;
     if (p > 1) params.set("ep", String(p));
     else params.delete("ep");
@@ -89,6 +102,15 @@ export function TourEventsFeed({
     else params.delete("ef");
     const qs = params.toString();
     return qs ? `${pathname}?${qs}` : pathname;
+  }
+
+  /** 选中/清除玩家搜索：写 URL 交给 RSC 换入服务端已过滤数据；
+   *  页码归 1（筛选后条数变少，停在旧页会空白）；同页参数变化不滚顶（scroll:false）。
+   *  base 一律 usePathname()——代号 URL 进入后不能把 pathname 改成数字 id（跳动铁律） */
+  function pickAuthor(user: { id: number; chineseName: string } | null) {
+    startTransition(() => {
+      router.push(eventsUrl({ p: 1, author: user?.id ?? null }), { scroll: false });
+    });
   }
 
   async function loadMore() {
@@ -100,6 +122,8 @@ export function TourEventsFeed({
       // 关注的人由 API 从 session 取，客户端不传 uid。
       const params = new URLSearchParams({ page: "1", size: String(size) });
       if (filter !== "all") params.set("ef", filter);
+      // 玩家搜索态必须随「加载更多」透传，否则前缀被「全部玩家」数据替换
+      if (author && author > 0) params.set("eauthor", String(author));
       const res = await fetch(`/api/tournament/${compId}/events?${params.toString()}`, {
         cache: "no-store",
       });
@@ -161,6 +185,10 @@ export function TourEventsFeed({
               </a>
             )
           )}
+        </div>
+        {/* 按玩家搜索（2026-11-26）：与排行页搜索框同款（.goto_form），选中即筛该玩家动态 */}
+        <div className="video_search">
+          <TourEventsSearch uid={author} name={authorName} onPick={pickAuthor} />
         </div>
       </div>
       {rows.length > 0 ? (
@@ -272,13 +300,34 @@ export function TourEventsFeed({
         </ul>
       ) : (
         <div className="comp_section_empty">
-          {filter === "follow" && !loggedIn
-            ? "请先登录后再查看关注动态"
-            : filter === "finished"
-              ? "暂无完赛动态"
+          {author
+            ? filter === "finished"
+              ? "暂无该玩家的完赛动态"
               : filter === "follow"
-                ? "暂无关注动态"
-                : "暂无动态"}
+                ? "暂无该玩家的关注动态"
+                : "暂无该玩家的动态"
+            : filter === "follow" && !loggedIn
+              ? "请先登录后再查看关注动态"
+              : filter === "finished"
+                ? "暂无完赛动态"
+                : filter === "follow"
+                  ? "暂无关注动态"
+                  : "暂无动态"}
+          {author ? (
+            <>
+              {"　"}
+              <a
+                href={eventsUrl({ p: 1, author: null })}
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                  e.preventDefault();
+                  pickAuthor(null);
+                }}
+              >
+                查看全部动态
+              </a>
+            </>
+          ) : null}
         </div>
       )}
       <div className="list_footer">

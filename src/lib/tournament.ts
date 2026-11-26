@@ -917,8 +917,9 @@ export async function getTourEventsPage(
   tournamentId: number,
   page: number,
   pageSize = 20,
-  /** 2026-11-23 张老师需求：动态筛选；viewerId 仅 follow 用，服务端从 session 取 */
-  options: { filter?: TourEventsFilter; viewerId?: number } = {}
+  /** 2026-11-23 张老师需求：动态筛选；viewerId 仅 follow 用，服务端从 session 取。
+   *  2026-11-26 张老师需求：userId=按玩家搜索（URL eauthor），查询层限定该玩家的动态 */
+  options: { filter?: TourEventsFilter; viewerId?: number; userId?: number } = {}
 ): Promise<{ rows: TourEventRow[]; total: number; page: number; pageSize: number }> {
   const cid = BigInt(tournamentId);
   const filter = options.filter ?? "all";
@@ -932,7 +933,8 @@ export async function getTourEventsPage(
     followeeIds = fs.map((r) => Number(r.followee));
   }
   // 筛选在查询层生效（不是切片后再前端过滤）：total / 分页都按筛选后的结果算，
-  // 完赛只看 type=6；关注只看关注对象的参赛动态（官方事件主体 user_id=0 自然排除）。
+  // 完赛只看 type=6；关注只看关注对象的参赛动态（官方事件主体 user_id=0 自然排除）；
+  // 按玩家搜索限定 user_id=该玩家（官方事件天然排除）。
   const eventWhere: {
     tournamentId: bigint;
     type: number | { not: number };
@@ -941,6 +943,14 @@ export async function getTourEventsPage(
     ? { tournamentId: cid, type: TOUR_EVENT_FINISHED }
     : { tournamentId: cid, type: { not: TOUR_EVENT_JOIN_OPEN } };
   if (filter === "follow") eventWhere.userId = { in: followeeIds.map((uid) => BigInt(uid)) };
+  // 玩家搜索与「关注」是 AND 关系（搜索的人不在关注列表即空结果，不静默退回全部）；
+  // 无关注筛选时直接限定单个 uid。
+  if (options.userId && options.userId > 0) {
+    const uid = BigInt(options.userId);
+    eventWhere.userId = {
+      in: eventWhere.userId ? eventWhere.userId.in.filter((x) => x === uid) : [uid],
+    };
+  }
   // 全量取出本比赛动态（比赛量级十场、单场动态几千条，内存归并最直白；
   // 跨批合并/总成绩进度都无法在 SQL 一层表达）。
   // 2026-11-19 张老师定：type=1 报名开始动态废弃——查询层直接排除（每场一条无信息量）

@@ -22,10 +22,14 @@ export async function GET(
   // 动态筛选（2026-11-23）：服务端按 filter + session 取数，不信客户端传 uid（防越权）。
   const filter = parseTourEventsFilter(sp.get("ef"));
   const session = filter === "follow" ? await getSession() : null;
+  // 按玩家搜索（2026-11-26 张老师需求）：eauthor=玩家 id，与 RSC 首屏同口径；
+  // 非法值当无筛选（与录像区 vauthor 口径一致）。
+  const author = Math.max(parseInt(sp.get("eauthor") ?? "", 10) || 0, 0) || undefined;
 
   const data = await getTourEventsPage(compId, page, size, {
     filter,
     viewerId: session?.uid,
+    userId: author,
   });
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
   return NextResponse.json({ ok: true, ...data, totalPages });
