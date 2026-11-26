@@ -8746,7 +8746,10 @@ body #header .nav li a.msg_icon_btn .msg_badge {
   padding: 10px 8px;
   font-size: 15px;
   line-height: 1.8;
-  word-break: break-all;
+  /* 2026-11-26 张老师：输入框内英文单词同样不得从中间折断（同 .bbs_content 口径）。
+     break-all 按字符硬断，改 normal + anywhere：整词换行，超长 URL 才必要时断行兜底 */
+  word-break: normal;
+  overflow-wrap: anywhere;
   outline: none;
   caret-color: #fdc61a;
 }
@@ -9193,7 +9196,9 @@ span.vs_btn[data-tip]:hover::after {
   font-size: 15px;
   line-height: 1.8;
   font-family: inherit;
-  word-break: break-all;
+  /* 2026-11-26 张老师：同论坛编辑器，英文整词换行，长串兜底断行 */
+  word-break: normal;
+  overflow-wrap: anywhere;
   resize: vertical;
   outline: none;
   caret-color: #fdc61a;
