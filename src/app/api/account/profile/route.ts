@@ -56,6 +56,7 @@ export async function POST(req: Request) {
   // 表单「保持现状」选项）视为不修改；其余非法值 400
   const areaRaw = String(body.area ?? "");
   const uid = BigInt(session.uid);
+  const now = BigInt(Math.floor(Date.now() / 1000));
   const prevUser = await prisma.user.findUnique({ where: { id: uid }, select: { area: true } });
   const prevArea = prevUser?.area ?? "";
   const areaLegal = (AREA_LIST as readonly string[]).includes(areaRaw);
@@ -80,23 +81,38 @@ export async function POST(req: Request) {
         where: { id: uid },
         data: {
           area: areaRaw,
-          updateTime: BigInt(Math.floor(Date.now() / 1000)),
+          updateTime: now,
         },
       });
       await applyRankAreaChange(tx, session.uid, prevArea, areaRaw);
     });
   }
 
-  await prisma.userInfo.update({
+  // upsert 而非 update（2026-11-28 张老师报「改生日保存失败」根因）：注册流程
+  // createRegisteredUser 只建 user/user_auth/user_stat 三表、从不建 user_info 行——
+  // 新站注册的账号首次改资料时 update 找不到行即 P2025 → 500（生产 259 人无此行，
+  // 76 人近 7 天活跃）。与 title-pref / 后台编辑同口径：无行则建
+  await prisma.userInfo.upsert({
     where: { id: uid },
-    data: {
+    create: {
+      id: uid,
       qq: fields.qq,
       nickname: fields.nickname,
       mouse: fields.mouse,
       pad: fields.pad,
       interest: fields.interest,
       ...(birthday !== undefined ? { birthday } : {}),
-      updateTime: BigInt(Math.floor(Date.now() / 1000)),
+      createTime: now,
+      updateTime: now,
+    },
+    update: {
+      qq: fields.qq,
+      nickname: fields.nickname,
+      mouse: fields.mouse,
+      pad: fields.pad,
+      interest: fields.interest,
+      ...(birthday !== undefined ? { birthday } : {}),
+      updateTime: now,
     },
   });
   return NextResponse.json({ ok: true });

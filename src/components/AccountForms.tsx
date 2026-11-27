@@ -36,7 +36,6 @@ export interface AvatarSlot {
 export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefaults; avatarSlot: AvatarSlot }) {
   const router = useRouter();
   const [form, setForm] = useState(defaults);
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const set = (k: keyof ProfileDefaults) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -44,7 +43,6 @@ export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefault
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setMessage(null);
     setSubmitting(true);
     try {
       const res = await fetch("/api/account/profile", {
@@ -54,7 +52,9 @@ export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefault
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMessage({ ok: false, text: data.error ?? "保存失败" });
+        // 2026-11-28 张老师：错误一律全局居中红色气泡（与 PasswordForm 同口径，
+        // 按钮旁不再渲染错误文字）
+        toast(data.error ?? "保存失败", "error");
         return;
       }
       // 2026-11-03 张老师：按钮旁不再显示「保存成功」文字（与居中气泡重复）；
@@ -171,11 +171,6 @@ export function ProfileForm({ defaults, avatarSlot }: { defaults: ProfileDefault
               <button type="submit" className="button active" disabled={submitting}>
                 保存
               </button>
-              {message && (
-                <div className={message.ok ? "hint" : "error"} style={{ marginTop: 8 }}>
-                  {message.text}
-                </div>
-              )}
             </td>
           </tr>
         </tbody>
