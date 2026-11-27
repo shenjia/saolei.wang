@@ -10542,6 +10542,28 @@ html:has(#online_play) body {
 html:has(#online_play) #footer {
   margin-top: auto;
 }
+/* 低分辨率窗口（视口高 ≤520px，2026-11-27 张老师定）：站头+主板块+页脚总高
+   超过视口，页脚本就被锁滚推出屏外——让它彻底不渲染（不占位、不挡点击），
+   把竖向空间全让给主板块，使「主板块下边缘贴到屏幕底部」成立。
+   ⚠️ 不能用 position:absolute：不占位但会铺在内容上拦截点击（实测盖住
+   级别筛选器）。与 JS 的 .lowfit 墙、normalMaxZoom 低高度预算同断点，三处成对 */
+@media (max-height: 520px) {
+  html:has(#online_play) #footer {
+    display: none;
+  }
+  /* 页脚不渲染后，body 的 100vh 由 #page 吃满：主板块下边缘才能「贴到屏幕底部」
+     （原 flow-root 按内容高，底部会空出 #page 的 padding） */
+  html:has(#online_play) #page.main {
+    flex: 1 0 auto;
+    /* 低窗口竖向寸土寸金：页面下内边距与主板块下外边距收掉——否则「主板块底
+       贴到视口底」与「页面不溢出」在原版式下矛盾（实测 #page 底恒比主板块底
+       多 40px）。与 normalMaxZoom 低高度预算同口径（那边只扣主板块 pb+border） */
+    padding-bottom: 0;
+  }
+  html:has(#online_play) #page.main > .box {
+    margin-bottom: 0;
+  }
+}
 /* 全屏开关：根容器全屏时补深色底（全屏默认背底为纯黑）、内容超高可滚 */
 #online_play > div:fullscreen,
 #online_play > div.op-webfs {
@@ -18340,10 +18362,8 @@ body #header .nav li a.nav_tour_upcoming:hover,
 #online_play .bvwall[hidden] {
   display: none;
 }
-/* 窄版墙（银框渲染宽 < 420px，JS 按 gwrap 宽挂 .narrow）：墙宽收进银框后
-   「标题 + 格子 + 进度」三段同行放不下，改成标题/进度同列首行两端、格子整行折行。
-   .bw_sq 是 inline-block，给 .bw_grid 100% 行宽即自动折行；order 把进度提到
-   格子前面，避免 wrap 后进度掉到第三行。格子仍左对齐保证各行列位对齐 */
+/* 窄版墙（正常桌面、银框渲染宽 <420px，JS 按 gwrap 宽挂 .narrow）：
+   墙宽收进银框后三段同行放不下，改成标题/进度首行两端、格子整行折行。 */
 #online_play .bvwall.narrow .bw_row {
   display: flex;
   flex-wrap: wrap;
@@ -18356,6 +18376,31 @@ body #header .nav li a.nav_tour_upcoming:hover,
   order: 3;
   flex: 0 0 100%;
   min-width: 0;
+}
+/* 低高度通栏墙（视口高 ≤520px，JS 挂 .lowfit；2026-11-27 张老师定）：
+   不再把墙锁进银框挤成多行，而是与全屏一样拉满主板块宽度；标题在左、格子墙
+   弹性占满中段、进度在右。格子仍按 10px 固定尺寸在自然宽度内换行，极窄主板块
+   也不会横溢。border-box 让 100% 包含 padding/border，外缘严格不超出主板块。 */
+#online_play .bvwall.lowfit {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+}
+#online_play .bvwall.lowfit .bw_row {
+  display: flex;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+#online_play .bvwall.lowfit .bw_head,
+#online_play .bvwall.lowfit .bw_stat {
+  flex: 0 0 auto;
+  order: initial;
+}
+#online_play .bvwall.lowfit .bw_head { margin-bottom: 0; }
+#online_play .bvwall.lowfit .bw_grid {
+  flex: 1 1 0;
+  min-width: 0;
+  order: initial;
 }
 /* 标题 + 格子墙 + 进度三段同行（2026-11-16 张老师六定）：标题在左、格子居中、
    进度在右（无括号），左右与标题对称。.bw_row 行内弹性容器、宽度自适应内容
