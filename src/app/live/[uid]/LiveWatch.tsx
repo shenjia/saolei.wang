@@ -665,12 +665,17 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
      · 侧位：面板 zoom 与游戏倍率同步（zoomCur，>1.5 时以棋盘高封顶），
        再按侧空/视口高/数据面板高线性收缩；左面板右缘贴银框左−14、
        右面板左缘贴银框右+14、顶与银框对齐；坐标 = 渲染域 ÷ pz ÷ 面板 zoom。
-     · 侧位放不下（<960 窄屏或侧空不足）→ 整组搬进 #gr_modal 遮罩卡片
-       居中（enterMask 口径——DOM 搬家不重建，雷达/按钮/倒计时不丢；
-       进遮罩清 inline 定位与缩放，点遮罩空白收卡片、面板搬回 game_area）。
+     · 侧位放不下 → 整组搬进 #gr_modal 遮罩卡片居中（enterMask 口径——DOM
+       搬家不重建，雷达/按钮/倒计时不丢；进遮罩清 inline 定位与缩放，点遮罩
+       空白收卡片、面板搬回 game_area）。
+     **侧空按视口量（2026-11-28 00:06 张老师定「面板应该是浮动的，不受主板块
+       限制，和练习页逻辑一致」）**：面板挂 #game_area 但 left 可为负、溢出
+       .box 浮到视口两侧——练习页 sideFit 逐字口径 `gw.left - 12 - 14` /
+       `innerWidth - gw.right - 12 - 14`。此前误按「game_area 内余量」判侧空
+       （#page.main 限宽 960，高级盘几乎占满 → 宽屏也恒走遮罩）。
+     阈值同练习页：≥960 且两面板侧位渲染宽都 ≥120px，否则遮罩。
      依赖 [phase, stats, zoom, level] 重摆 + 120ms 二次复核（雷达异步落地） */
   const modalHostRef = useRef<HTMLDivElement | null>(null);
-  const panelBaseRef = useRef<{ w: number; h: number } | null>(null); /* 1x 自然尺寸缓存 */
   useEffect(() => {
     const ga = gameAreaRef.current;
     const gr = gwrapRef.current;
@@ -686,8 +691,44 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
       if (res.parentElement !== ga && res.parentElement !== null) ga.appendChild(res);
       rep.style.zoom = "";
       res.style.zoom = "";
+      rep.style.visibility = "";
+      res.style.visibility = "";
       return;
     }
+    /* 进遮罩（enterMask 口径）：建宿主（首次）、面板搬进卡片、清 inline 定位
+       与缩放，卡片 flex 接管 */
+    const enterMask = () => {
+      let host = modalHostRef.current;
+      if (!host) {
+        const h = document.createElement("div");
+        h.id = "gr_modal";
+        h.innerHTML = '<div class="grm_card"><div class="grm_slot" id="lv_grm_result"></div><div class="grm_slot" id="lv_grm_stats"></div></div>';
+        document.body.appendChild(h);
+        modalHostRef.current = h;
+        /* 点遮罩空白收卡片：面板搬回 game_area 并隐藏（裸露在 game_area
+           左上角会盖住棋盘——下次 place() 侧位/遮罩判定时再恢复显示） */
+        h.addEventListener("click", (e) => {
+          if (e.target !== h) return;
+          h.hidden = true;
+          ga.appendChild(res);
+          ga.appendChild(rep);
+          res.style.visibility = "hidden";
+          rep.style.visibility = "hidden";
+        });
+        host = h;
+      }
+      host.hidden = false;
+      rep.style.left = "";
+      rep.style.top = "";
+      rep.style.zoom = "";
+      res.style.left = "";
+      res.style.top = "";
+      res.style.zoom = "";
+      rep.style.visibility = "";
+      res.style.visibility = "";
+      host.querySelector("#lv_grm_result")?.appendChild(res);
+      host.querySelector("#lv_grm_stats")?.appendChild(rep);
+    };
     const place = () => {
       /* 已脱离文档（主播停止切引导页——观看树被 React 替换，闭包里的
          ga/gr/rep/res 全成 detached 节点）时绝不再摆：否则 ESC 退出全屏
@@ -703,92 +744,83 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
       if (gw.width < 40 || ga.clientWidth < 40) return;
       const pz = 1; /* #page 在 ≥960 恒 1（窄屏走遮罩，不进侧位路径） */
       const zGame = zoomRef.current;
-      /* 1x 自然尺寸：量前清 zoom + 定位（挂在 ga 里 flow 外 absolute 不影响） */
-      if (!panelBaseRef.current) {
-        const saveZRep = rep.style.zoom, saveZRes = res.style.zoom;
-        rep.style.zoom = "";
-        res.style.zoom = "";
-        panelBaseRef.current = { w: rep.offsetWidth, h: rep.offsetHeight };
-        rep.style.zoom = saveZRep;
-        res.style.zoom = saveZRes;
-      }
-      const base = panelBaseRef.current!;
-      /* 侧位判定（练习页 mqPanelDesktop 同口径）：≥960 且两面板按 1x 都
-         有侧空（缩放后只会更窄，1x 判定是保守上界） */
-      const desktop = window.matchMedia("(min-width: 960px)").matches;
-      const availLeft = (gw.left - gaR.left) - 14;
-      const availRight = ga.clientWidth - (gw.right - gaR.left) - 14;
-      const sideOk = desktop && availLeft >= 40 && availRight >= 40;
-      if (!sideOk) {
-        /* 进遮罩（enterMask 口径）：清 inline 定位与缩放，卡片 flex 接管 */
-        let host = modalHostRef.current;
-        if (!host) {
-          const h = document.createElement("div");
-          h.id = "gr_modal";
-          h.innerHTML = '<div class="grm_card"><div class="grm_slot" id="lv_grm_result"></div><div class="grm_slot" id="lv_grm_stats"></div></div>';
-          document.body.appendChild(h);
-          modalHostRef.current = h;
-          /* 点遮罩空白收卡片：面板搬回 game_area（下一局 place() 重新定位） */
-          h.addEventListener("click", (e) => {
-            if (e.target !== h) return;
-            h.hidden = true;
-            ga.appendChild(res);
-            ga.appendChild(rep);
-          });
-          host = h;
-        }
-        host.hidden = false;
-        rep.style.left = "";
-        rep.style.top = "";
-        rep.style.zoom = "";
-        res.style.left = "";
-        res.style.top = "";
-        res.style.zoom = "";
-        host.querySelector("#lv_grm_result")?.appendChild(res);
-        host.querySelector("#lv_grm_stats")?.appendChild(rep);
+      /* 窄屏恒遮罩（练习页 mqPanelDesktop 同口径）：.show 只在 ≥960 生效，
+         窄屏面板 display:none 量不出，不进侧位路径 */
+      if (!window.matchMedia("(min-width: 960px)").matches) {
+        enterMask();
         return;
       }
-      /* 侧位路径：面板搬回 game_area、遮罩隐藏 */
-      if (modalHostRef.current && !modalHostRef.current.hidden) modalHostRef.current.hidden = true;
+      /* 面板先归位 game_area 再量：挂遮罩卡片时被 flex 拉伸（结算面板
+         width:100%），量出的不是自然尺寸。同一任务内搬→量→判定→再落位，
+         无中间帧闪烁 */
       if (rep.parentElement !== ga) ga.appendChild(rep);
       if (res.parentElement !== ga) ga.appendChild(res);
-      /* sideFit（练习页逐字口径）：naturalZ＝游戏倍率（面板与游戏同步缩放），
-         大倍率高盘时以「面板高＝棋盘渲染高」封顶；侧空/视口高再线性收缩 */
-      const sideFit = (h: number, availSide: number): number => {
-        const gameCapH = zGame > 1.5 && gw.height > 1 ? gw.height / (h * pz) : 2.5;
-        const naturalZ = Math.max(0.3, Math.min(zGame, gameCapH, 2.5));
-        const sideCap = availSide / (base.w * pz);
-        const hCap = (window.innerHeight - 12 - gw.top) / (h * pz);
-        return Math.max(0.25, Math.min(naturalZ, sideCap, hCap));
+      rep.style.visibility = "";
+      res.style.visibility = "";
+      /* 1x 自然尺寸（练习页 panelNatural 口径：zoom 归 1 再量，每轮重量） */
+      const measure = (p: HTMLElement) => {
+        const saveZ = p.style.zoom;
+        p.style.zoom = "";
+        const r = { w: p.offsetWidth, h: p.offsetHeight };
+        p.style.zoom = saveZ;
+        return r;
       };
-      /* placeSide（练习页逐字口径）：put 后底部越出视口按高度比再压一档 */
-      const placeSide = (panel: HTMLElement, side: "left" | "right", z: number) => {
+      const baseRep = measure(rep);
+      const baseRes = measure(res);
+      /* sideFit（练习页逐字口径）：naturalZ＝游戏倍率（面板与游戏同步缩放），
+         大倍率高盘时以「面板高＝棋盘渲染高」封顶；侧空按**视口**量（视口缘
+         12 + 面板间隙 14）、视口高再线性收缩。maxRenderedH＝渲染高上限 */
+      const sideFit = (b: { w: number; h: number }, availSide: number, maxRenderedH?: number) => {
+        const gameCapH = zGame > 1.5 && gw.height > 1 ? gw.height / (b.h * pz) : 2.5;
+        const naturalZ = Math.max(0.3, Math.min(zGame, gameCapH, 2.5));
+        const sideCap = b.w > 1 ? availSide / (b.w * pz) : 2.5;
+        const hCap = b.h > 1 ? (window.innerHeight - 12 - gw.top) / (b.h * pz) : 2.5;
+        const hMax = maxRenderedH != null && b.h > 1 ? maxRenderedH / (b.h * pz) : 2.5;
+        const z = Math.max(0.25, Math.min(naturalZ, sideCap, hCap, hMax));
+        return { z, renderedW: b.w * z * pz };
+      };
+      /* 侧空按视口量（练习页 sideFit 逐字）——面板浮动到主板块之外 */
+      const availLeft = gw.left - 12 - 14;
+      const availRight = window.innerWidth - gw.right - 12 - 14;
+      const statsFit = sideFit(baseRep, availLeft);
+      /* 结算面板渲染高封顶＝数据面板渲染高（练习页 2026-10-19 口径） */
+      const resultMaxH = baseRep.h > 1 ? statsFit.z * baseRep.h * pz : undefined;
+      const resultFit = sideFit(baseRes, availRight, resultMaxH);
+      /* 阈值判定（练习页 PANEL_MIN_W 同值）：任一面板按侧位公式摆出来都不到
+         120px 渲染宽 → 侧位没有意义，转遮罩 */
+      if (statsFit.renderedW < 120 || resultFit.renderedW < 120) {
+        enterMask();
+        return;
+      }
+      /* 侧位路径：面板在 game_area（上面已归位）、遮罩隐藏 */
+      if (modalHostRef.current && !modalHostRef.current.hidden) modalHostRef.current.hidden = true;
+      /* placeSide（练习页逐字口径）：put 后底部越出视口按高度比再压一档；
+         返回实际生效 zoom（末段兜底收缩后可能 < 入参，结算封顶要用它） */
+      const placeSide = (panel: HTMLElement, side: "left" | "right", baseW: number, z: number): number => {
         const put = (zz: number) => {
           const t = (v: number) => v / pz / zz;
           panel.style.zoom = String(zz);
           panel.style.top = t(gw.top - gaR.top) + "px";
           panel.style.left = side === "left"
-            ? t(gw.left - gaR.left - 14) - base.w + "px"
+            ? t(gw.left - gaR.left - 14) - baseW + "px"
             : t(gw.right - gaR.left + 14) + "px";
         };
         put(z);
+        let zFinal = z;
         const now = panel.getBoundingClientRect();
         if (now.bottom > window.innerHeight - 8 && now.height > 1) {
-          put(Math.max(0.25, z * ((window.innerHeight - 8 - now.top) / now.height)));
+          zFinal = Math.max(0.25, z * ((window.innerHeight - 8 - now.top) / now.height));
+          put(zFinal);
         }
+        return zFinal;
       };
-      /* 数据面板：先算（结算面板封顶要用它的实际高） */
-      const zStats = sideFit(base.h, availLeft);
-      placeSide(rep, "left", zStats);
-      const repNow = rep.getBoundingClientRect();
-      /* 结算面板：渲染高 ≤ 数据面板渲染高（练习页 2026-10-19 口径） */
-      const resH = res.offsetHeight / (parseFloat(res.style.zoom) || 1);
-      let zResult = sideFit(resH, availRight);
-      const resRenderedH = resH * zResult * pz;
-      if (resRenderedH > repNow.height && resH > 1) {
-        zResult = Math.max(0.25, zResult * (repNow.height / resRenderedH));
-      }
-      placeSide(res, "right", zResult);
+      /* 数据面板先摆，拿实际生效 zoom 给结算封顶（数据面板被底部兜底压过时
+         封顶偏松，结算仍可能高过数据——练习页 9566 行口径） */
+      const statsZFinal = placeSide(rep, "left", baseRep.w, statsFit.z);
+      const capH = statsZFinal * baseRep.h * pz;
+      const zCap = baseRes.h > 1 ? capH / (baseRes.h * pz) : 2.5;
+      const zResult = Math.max(0.25, Math.min(resultFit.z, zCap));
+      placeSide(res, "right", baseRes.w, zResult);
     };
     requestAnimationFrame(place);
     /* 面板内容尺寸可能异步变化（雷达 React root 落地）——阶梯重测：
@@ -806,12 +838,14 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
       for (const t of retries) window.clearTimeout(t);
       window.removeEventListener("resize", repl);
       document.removeEventListener("fullscreenchange", repl);
-      panelBaseRef.current = null;
-      /* 卸载：面板搬回 game_area、遮罩摘除（组件卸载时 gr_modal 一并清） */
+      /* 卸载：面板搬回 game_area、遮罩摘除（组件卸载时 gr_modal 一并清）。
+         面板的直接父是卡片里的槽节点（#lv_grm_*），判归属用 host.contains */
       const host = modalHostRef.current;
       if (host) {
-        if (rep.parentElement === host) ga.appendChild(rep);
-        if (res.parentElement === host) ga.appendChild(res);
+        if (host.contains(rep)) ga.appendChild(rep);
+        if (host.contains(res)) ga.appendChild(res);
+        rep.style.visibility = "";
+        res.style.visibility = "";
         host.remove();
         modalHostRef.current = null;
       }
