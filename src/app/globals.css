@@ -84,14 +84,32 @@ body #header .wrapper {
   margin: 0 auto;
   padding: 0 15px;
 }
+body #header .logo a {
+  /* logo 链接改 flex 行排布（2026-11-28 张老师 Safari 报障「域名挤到下面」根修）：
+     legacy 是 h1/h2 两个裸 float 并排；h1 还背着通用 h1{margin:0 0 19.5px}（此前只在
+     ≤960 移动块里清过，桌面端一直没清）→ .logo 浮动盒高 44+19.5=63.5，溢出 44px
+     顶栏 19.5px；h2 的 float 一旦换行就落到顶栏下方的页面里（Safari 实发，
+     无头 WebKit/Chromium 各宽度均未复现）。flex 行排布：h1/h2 不再是浮动体，
+     永不换行；间距沿用 legacy 原值（icon margin-right:8 / h2 margin-left:5，
+     不引入 gap——否则 icon 的 margin-right 会与 gap 叠加，icon 与站名间多出 5px）；
+     高度锁 44px 与顶栏齐平。 */
+  display: flex;
+  align-items: center;
+  height: 44px;
+}
 body #header .logo a h1 {
   color: #eeeeee; /* 站名弃黄改灰白（2026-09-24 张老师：黄与 icon 冲突刺眼，取旧版 Logo.gif 站名同款色）；hover 仍走 legacy 绿 */
   font-size: 22px;
   line-height: 44px;
+  /* 清 legacy 通用 h1 的 19.5px 下边距（桌面端补齐；≤960 块 2026-11-15 已清） */
+  margin-bottom: 0;
+  float: none;
 }
 body #header .logo a h2 {
   font-size: 15px;
   line-height: 44px;
+  margin: 0 0 0 5px; /* legacy 原值显式钉住 */
+  float: none;
 }
 body #header .nav li a {
   font-size: 15px;
