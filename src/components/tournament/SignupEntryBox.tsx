@@ -1,11 +1,11 @@
 "use client";
 
 // 报名参赛盒（2026-11-19 张老师定，集体赛详情页右栏）：
-// · 未报名或未开始 → 「报名参赛」按钮（风格同首页开始练习 #play_entry 银灰凸起，
-//   图标=_PERSON 旗标 symbol），下方倒计时「距离开赛还有…/距离比赛结束还有…」
+// · 仅用于未开始的比赛：未报名 → 「报名参赛」按钮（风格同首页开始练习 #play_entry
+//   银灰凸起，图标=_PERSON 旗标 symbol），下方显示开赛倒计时
 // · 点击 → POST /api/tournament/join → 绿气泡「报名参赛成功」→ 已报名态
 // · 已报名未开赛 → 绿色「已报名参赛」不可点（disabled 形态，无倒计时变化）
-// 已报名+已开始 → 由页面直接渲染 #play_row 双钮（本组件不渲染）
+// 已开始的非窗口赛 → 由页面直接渲染「开始比赛、传录像」双钮（本组件不渲染）
 
 import { useEffect, useState } from "react";
 import { toast } from "@/components/Toast";

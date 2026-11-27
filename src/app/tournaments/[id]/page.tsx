@@ -270,10 +270,10 @@ export default async function CompetitionDetailPage({
           {/* 登录态：按钮区按状态分流：
               · 窗口赛（windowHours>0）所有状态 → WindowPlayBox；个人窗口已结束时
                 按完赛动态四态出银灰按钮 +（比赛未正式结束时）比赛结束倒计时
-              · 集体赛：已开始且已报名 → 「进入比赛、传录像」双钮（原 #play_row）；
-                未开始或未报名 → 「报名参赛」单按钮（风格同首页开始练习，图标=_PERSON
-                旗标；已报名未开赛变绿色「已报名参赛」不可点）+ 下方倒计时
-                「距离开赛还有…/距离比赛结束还有…」
+              · 集体赛：已开始 → 「开始比赛、传录像」双钮（原 #play_row），无论是否
+                预报名都可参赛（首盘挂接时补报名）；未开始 → 「报名参赛」单按钮
+                （风格同首页开始练习，图标=_PERSON 旗标；已报名变绿色「已报名参赛」
+                不可点）+ 下方开赛倒计时
               · 2026-11-24 张老师需求：已结束且未报名（集体赛/窗口赛无窗口均同）→
                 玩家卡片上方显示银灰不可点「未报名」钮（样式同「已完赛」），
                 下方不再显示任何时间；「成绩」板块同时整块隐藏
@@ -301,15 +301,15 @@ export default async function CompetitionDetailPage({
                     </button>
                   </div>
                 )
-              ) : myResult?.joined && c.status === "active" ? (
+              ) : c.status === "active" ? (
                 <div id="play_row">
-                  <Link id="play_entry" href={`/online?c=${compId}`} target="_blank">
+                  <Link id="play_entry" href={`/online?c=${compId}`} target="_blank" prefetch={false}>
                     <svg viewBox="0 0 260 260" width="24" height="24" aria-hidden="true">
                       <use href="#face-flat" />
                     </svg>
-                    <span>进入比赛</span>
+                    <span>开始比赛</span>
                   </Link>
-                  <Link id="upload_entry" href="/video/upload" target="_blank">
+                  <Link id="upload_entry" href="/video/upload" target="_blank" prefetch={false}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src="/images/upload-folder-icon.png" alt="" width={24} />
                     <span>传录像</span>
