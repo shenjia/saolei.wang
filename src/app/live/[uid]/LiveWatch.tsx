@@ -1131,8 +1131,16 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
                 </span>
               : <span className="live_host_playing">正在比赛</span>)
             : <span className="live_host_playing">正在练习</span>}
-          {/* 红点+「x人正在旁观」已挪主板块右下角徽标（21:12 张老师定，
-              与主播界面同位同款） */}
+          {/* 「x人正在旁观」徽标（2026-11-27 23:38 张老师定：从主板块右下角挪回
+              标题行——旁观页的结算面板浮在主板块右下，徽标放那里会被面板盖住；
+              标题行在版面流内、面板盖不到）。紧跟「正在练习 / 正在参加 XXX」之后，
+              外观沿用 .live_viewers_badge 圆角矩形同款；viewers=0 隐藏（观众打开
+              页面即计入 ≥1 常显） */}
+          {viewerCount > 0 && (
+            <span className="live_viewers_badge live_watchers_badge">
+              {viewerCount}人正在旁观
+            </span>
+          )}
         </div>
         <div className="gicons">
           <button className="gicon" id="btn_settings" type="button" onClick={() => setSettingsOpen((v) => !v)}
@@ -1192,14 +1200,6 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
 
       {/* 游戏窗：练习页同款 game_area；终局面板悬浮在 gwrap 两侧（不挤占空间） */}
       <div className="live_game" id="game_area" ref={gameAreaRef}>
-        {/* 旁观数徽标（2026-11-27 21:12 张老师定）：从标题行挪到主板块右下角——
-            与主播界面徽标同位同款（.live_viewers_badge 共用样式）；全屏时
-            fixed 到屏幕右下角。viewers=0 隐藏（观众打开页面即计入 ≥1 常显） */}
-        {viewerCount > 0 && (
-          <span className="live_viewers_badge live_watchers_badge">
-            {viewerCount}人正在旁观
-          </span>
-        )}
         <div className="gwrap" ref={gwrapRef}>
           <div className="gbar">
             <svg className="ledc" ref={ledMinesRef} viewBox="0 0 410 250" role="img" aria-label="剩余雷数">

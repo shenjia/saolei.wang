@@ -19690,16 +19690,32 @@ body #header .nav li a.nav_tour_upcoming:hover,
   opacity: 1;
 }
 /* 观看页徽标（.live_watchers_badge，LiveWatch JSX）：观众没有主播的旁观
-   开关——不出 hover 提醒气泡、不挡其下元素点击 */
+   开关——不出 hover 提醒气泡、不挡其下元素点击。
+   位置（2026-11-27 23:38 张老师定）：在标题行内、紧跟「正在练习/正在参加
+   XXX」之后——流内 inline-flex，**不**走基础规则的 absolute 右下角悬浮
+   （旁观页结算面板浮在主板块右下，悬浮会被面板盖住）。
+   ⚠️ 特定性：本规则 (1,4,0) 压过基础悬浮规则 (1,1,0)；下方全屏 fixed 规则
+   用 :not(.live_watchers_badge) 直接排除观看页徽标，两者不竞争——观看页徽标
+   永远留流内，不随全屏飘到屏幕右下。字号 13px 比主播界面略小一档，
+   与 15px 标题行文字协调 */
 #online_play .live_viewers_badge.live_watchers_badge {
   pointer-events: none;
+}
+#online_play .live_watch .live_host > .live_viewers_badge.live_watchers_badge {
+  position: static;
+  margin-left: 2px;
+  padding: 2px 8px;
+  font-size: 13px;
+  line-height: 16px;
 }
 #online_play .live_viewers_badge.live_watchers_badge::after {
   content: none;
 }
-/* 全屏态：屏幕右下角（fixed 在 fullscreen 子树内仍相对视口） */
-html.op-webfs #online_play .live_viewers_badge,
-html.op-fakefs #online_play .live_viewers_badge,
-#online_play .op_root:fullscreen .live_viewers_badge {
+/* 全屏态：屏幕右下角（fixed 在 fullscreen 子树内仍相对视口）——
+   仅主播练习页徽标（absolute 悬浮于 .op_root）；观看页徽标在标题行流内，
+   由上方 (2,4,0) 规则覆盖为 static，不受本条影响 */
+html.op-webfs #online_play .op_root .live_viewers_badge:not(.live_watchers_badge),
+html.op-fakefs #online_play .op_root .live_viewers_badge:not(.live_watchers_badge),
+#online_play .op_root:fullscreen .live_viewers_badge:not(.live_watchers_badge) {
   position: fixed;
 }
