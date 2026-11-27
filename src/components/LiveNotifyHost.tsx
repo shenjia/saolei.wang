@@ -27,6 +27,13 @@ import { sfxPlay, sfxPrefetch } from "@/lib/sfx";
    浏览器 autoplay 策略会拦——sfx 内部 catch 静默，点过页面即解锁）。 */
 const NOTIFY_SND = "/sounds/live-notify.mp3";
 
+/* 排行局反作弊自家节点注册表：通知在结算后动态挂载，OnlinePlay 武装时的
+   一次性注册扑空；由这里按真实 DOM 对象入册，绝不按可仿冒的 class 放行。 */
+const liveNotifyNodes = new WeakSet<Element>();
+export function isRegisteredLiveNotify(el: Element): boolean {
+  return liveNotifyNodes.has(el);
+}
+
 interface NotifyStreamer {
   uid: number;
   name: string;
@@ -208,6 +215,7 @@ export function LiveNotifyHost() {
   return (
     <div
       className={`live_notify${closing ? " closing" : ""}`}
+      ref={(el) => { if (el) liveNotifyNodes.add(el); }}
       role="status"
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
