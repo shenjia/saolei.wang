@@ -151,6 +151,33 @@ const FACE_MAP: Record<string, string> = {
   win: "face-win", press: "face-press-normal",
 };
 
+/**
+ * 真实屏幕矩形（2026-11-28 张老师 Safari 旁观报障「滚轮放大后结算/数据面板错位」根修）。
+ *
+ * ⚠️ WebKit（Safari / iOS）下，带 CSS `zoom` 的元素 `getBoundingClientRect()` 返回的
+ * 矩形**不含自身缩放**：布局 100×100、zoom:2 的元素，Chromium 报 400×400（真实屏幕
+ * 尺寸），WebKit 报 100×100，且坐标被压到 zoom 原点附近（真实位置 ÷ zoom）。
+ * place() 的全部坐标来自 `.gwrap` 的 rect，而 gwrap 正是带 zoom 的那个元素——
+ * 1x 时两者一致，**滚轮放大后 WebKit 给的是假矩形**（宽高小、坐标偏），面板
+ * 按假矩形定位 → 左面板压银框、结算面板盖棋盘（1440×900 1.8x 实测：左间隙
+ * −27px、右间隙 −77px、顶差 9px）。Chromium 下 k 恒为 1，行为零变化。
+ *
+ * 修正：取元素自身 computed zoom，WebKit 口径下（rect.width == offsetWidth）
+ * 把整个矩形（坐标+尺寸）乘回 zoom；Chromium 口径（rect 已含 zoom）原样返回。
+ */
+function screenRect(el: HTMLElement): DOMRect {
+  const r = el.getBoundingClientRect();
+  const z = parseFloat(getComputedStyle(el).zoom) || 1;
+  if (!(z > 0) || Math.abs(z - 1) < 0.001) return r;
+  /* 引擎口径判定：Chromium 的 rect 已含自身 zoom（rect.width = offsetWidth×z），
+     WebKit 的 rect 不含（rect.width = offsetWidth）。用 offsetWidth 一比即知 */
+  if (Math.abs(r.width - el.offsetWidth) > 0.5) return r; // Chromium：已是真实矩形
+  /* WebKit：整个矩形（坐标+尺寸）都是「真实值 ÷ z」，乘回去 */
+  const x = r.left * z, y = r.top * z, w = r.width * z, h = r.height * z;
+  return { x, y, left: x, top: y, right: x + w, bottom: y + h, width: w, height: h,
+    toJSON: () => ({}) } as DOMRect;
+}
+
 /** 结算雷达五轴（练习页 computeRadarPoints/buildResultPanel 同口径：
  * t=秒、est=t×3BV÷已完成3BV（败局半成品速度按 Est 折算）、
  * bvs=solvedBv/est、thrp=solvedBv/ce、ces=ce/t、cps=crossings/t、
@@ -736,8 +763,8 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
          挂进新建的 #gr_modal，遮罩和结算面板「复活」在引导页上
          （2026-11-27 18:20 张老师报障根因） */
       if (!ga.isConnected || !gr.isConnected || !rep.isConnected || !res.isConnected) return;
-      const gw = gr.getBoundingClientRect();
-      const gaR = ga.getBoundingClientRect();
+      const gw = screenRect(gr);
+      const gaR = screenRect(ga);
       /* 布局未就绪守卫（2026-11-27 22:29 张老师报 Safari 误进遮罩）：矩形
          尺寸还没量出来（字体/雷达落地前的瞬态）时不下判定——等重测链补测，
          一次误判会把面板锁死在遮罩里（ended 后无其他重摆触发） */
@@ -761,6 +788,8 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
       const measure = (p: HTMLElement) => {
         const saveZ = p.style.zoom;
         p.style.zoom = "";
+        /* 布局宽高（非屏幕渲染宽）：offsetWidth/Height 两引擎一致恒为布局值，
+           与 WebKit 的 rect 口径差异无关——见 screenRect 注释 */
         const r = { w: p.offsetWidth, h: p.offsetHeight };
         p.style.zoom = saveZ;
         return r;
@@ -807,7 +836,7 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
         };
         put(z);
         let zFinal = z;
-        const now = panel.getBoundingClientRect();
+        const now = screenRect(panel);
         if (now.bottom > window.innerHeight - 8 && now.height > 1) {
           zFinal = Math.max(0.25, z * ((window.innerHeight - 8 - now.top) / now.height));
           put(zFinal);
@@ -882,8 +911,8 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
         ? root
         : root.closest(".box") as HTMLElement | null;
       if (nz > prevZ && gwrap && bound) {
-        const gr = gwrap.getBoundingClientRect();
-        const br = bound.getBoundingClientRect();
+        const gr = screenRect(gwrap);
+        const br = screenRect(bound);
         const pad = 2;
         if (gr.bottom > br.bottom - pad || gr.right > br.right - pad || gr.left < br.left + pad) {
           nz = prevZ;
