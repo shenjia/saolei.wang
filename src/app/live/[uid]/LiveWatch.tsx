@@ -852,10 +852,19 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
     };
   }, [phase, stats, zoom, level]);
 
-  /* 滚轮缩放：受限在 .box 内（放大溢出回滚），练习页同参数 */
+  /* 滚轮缩放：普通态受限在 .box 内；两种全屏改用全屏宿主做边界（.box
+     已退出全屏渲染树，继续拿它量尺寸会把放大恒回滚）。监听挂 document：
+     结算面板进遮罩后搬到 body，滚轮不再冒泡经过 root，也要能缩放 */
   useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
     const onWheel = (e: WheelEvent) => {
       if (!settingsRef.current?.wheelZoom) return;
+      const target = e.target;
+      const nativeFs = document.fullscreenElement === root;
+      const inRoot = target instanceof Node && root.contains(target);
+      const inModal = target instanceof Node && !!modalHostRef.current?.contains(target);
+      if (!nativeFs && !inRoot && !inModal) return;
       e.preventDefault();
       wheelAcc.current += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1);
       let steps = Math.trunc(wheelAcc.current / 100);
@@ -869,10 +878,12 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
       const prevZ = zoomRef.current;
       let nz = Math.max(0.5, Math.min(2.5, prevZ - steps * 0.1));
       const gwrap = gwrapRef.current;
-      const box = rootRef.current?.closest(".box") as HTMLElement | null;
-      if (nz > prevZ && gwrap && box) {
+      const bound = nativeFs || webFsRef.current
+        ? root
+        : root.closest(".box") as HTMLElement | null;
+      if (nz > prevZ && gwrap && bound) {
         const gr = gwrap.getBoundingClientRect();
-        const br = box.getBoundingClientRect();
+        const br = bound.getBoundingClientRect();
         const pad = 2;
         if (gr.bottom > br.bottom - pad || gr.right > br.right - pad || gr.left < br.left + pad) {
           nz = prevZ;
@@ -885,11 +896,9 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
         writeZoom(levelRef.current ?? "beg", zoomRef.current);
       }, 320);
     };
-    const root = rootRef.current;
-    if (!root) return;
-    root.addEventListener("wheel", onWheel, { passive: false });
+    document.addEventListener("wheel", onWheel, { passive: false, capture: true });
     return () => {
-      root.removeEventListener("wheel", onWheel);
+      document.removeEventListener("wheel", onWheel, true);
       if (wheelTimer.current !== null) clearTimeout(wheelTimer.current);
     };
   }, []);
