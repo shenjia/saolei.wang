@@ -48,7 +48,7 @@ export default async function DonatePage() {
 
             <h2>赞助用途</h2>
             <p>
-              1、支付服务器租赁、带宽及域名费用
+              1、支付服务器租赁、流量、存储及域名费用
               <br />
               2、覆盖开发人力成本+AI Token成本
               <br />
