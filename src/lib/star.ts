@@ -61,34 +61,17 @@ export async function getClicks(userId: number): Promise<{ total: number; today:
   return { total: stat?.clicks ?? 0, today };
 }
 
-// ---------- 每日一星（2026-10-25 张老师定新版口径） ----------
+// ---------- 每日一星 ----------
 //
-// 旧版（2008~2026-10）：神界全员 ∪ 近 30 天破纪录者，当月不复选。
-// 新版（人神界体系已撤销）：候选池 =
-//   ① 少将级（含）以上军衔——高级时间 exp_time ≤ SUB50 阈值（TITLE_THRESHOLDS 少将档），
-//      现役（user.status=0），且近 30 天登录过（last_login_time，2026-10-26 张老师增列：
-//      沉睡老将不参选，实测①路 221 → 70、总池 262 → 113）。总司令（雷界第一人）
-//      必然 exp_time ≤ 50s，天然覆盖。
-//   ② 非少将级玩家收紧条件（张老师 10-25 定）：30 日内打破过个人纪录 且 排名处于上升状态——
-//      近 30 天有破纪录动态（news.type=20 PERSON_RECORD，与旧版口径同源）
-//      且 rank_snapshot.delta > 0（30 天滚动窗口名次差，正=上升；每日 00:05 cron
-//      预计算，与进步榜 /grow 同源）。两条件取交集：只破纪录但名次没涨 / 名次涨了
-//      但靠别人掉出榜都不够，要「自己进步 + 名次兑现」。
-//   ③ 头像不再硬性要求（十七轮 2026-10-25 改定）：有合法头像（新版上传 /uploads/avatar/、
-//      OAuth 外链 http / 旧站照片标记 '1'）者的入袋份额 ×2——鼓励上传真人照片，
-//      但不阻断无头像者参选。
-//   两路分开计席（十八轮 2026-10-28 张老师定）：两路资格各自独立入袋、不再并集去重——
-//   双命中（SUB50 有登录 且 有进步）席位叠加，有头像再整体翻倍。
-//   ②路席位分级（十九轮 2026-10-28 张老师定：进步多少 + 排位高低都计入）：
-//   席位 = 1 + 进步加成（delta≥200 +2 / delta≥50 +1）+ 排位加成（今日名次≤100 +2 / ≤500 +1），
-//   进步得多 / 排位已高仍进步者席位更多，②路理论最高 5 席。
-//   去掉近 30 日内已当选者，按日期哈希确定性随机抽一位。
-//   旧版「当月不复选」收紧为「30 日不复选」——与候选资格的 30 天窗口同拍，
-//   也避免月末/月初边界出现同月二次当选的观感问题。
-//   2026-11-02 张老师再定：在「30 天内当选过的不参选」后新增一条全局排除——
-//   「7 日内未登录过的不参选」（last_login_time < 今日-7 天者滤掉）。
-//   ①路原有 30 天登录条件之上再收紧到 7 天；②路此前以破纪录为活跃证明不设登录门槛，
-//   现一并补上（沉睡者即使破纪录也不参选）。
+// 2026-11-28 张老师定稿：两路分别计份，命中同一玩家时份数叠加。
+//   ① 高级 SUB50（exp_time ≤ 50000ms）、现役且 7 日内登录过：固定 1 份。
+//   ② 近 30 天有破纪录动态（news.type=20）且在进步榜（rank_snapshot.delta>0、今日有全国名次）：
+//      份数 =（进步榜人数 − 进步榜名次）+ max(0, 进步榜人数 − 当前全国排名)。
+//      进步榜名次按 delta 降序、今日全国名次升序，与 /ranking?view=grow 完全同口径；
+//      全国排名超过进步榜人数时第二项为负，按 0 份计，不产生负权重。
+//   有合法头像（新版上传 /uploads/avatar/、OAuth 外链 http、旧站照片标记 '1'）者总份数 ×2。
+//   最后排除近 30 日已当选者与 7 日内未登录者，按日期哈希确定性随机抽一位；
+//   star.date 唯一键兜底并发，保证同日多次请求结果一致。
 
 import { publishNews } from "./news";
 import { sendSystemMessage } from "./message";
@@ -118,7 +101,7 @@ export interface StarInfo {
 const MAJOR_GENERAL_MS = TITLE_THRESHOLDS[5]; // 50000
 
 /** 近 30 日已当选者 user id 集合（date > 今日-30 天，字符串日期比较） */
-async function recentStarUserIds(today: string): Promise<Set<number>> {
+async function recentStarUserIds(): Promise<Set<number>> {
   const cutoff = new Date(Date.now() - 30 * 86400 * 1000);
   const p = (n: number) => (n < 10 ? "0" + n : String(n));
   const cutoffStr = `${cutoff.getFullYear()}-${p(cutoff.getMonth() + 1)}-${p(cutoff.getDate())}`;
@@ -180,9 +163,9 @@ export async function hasStarSpeech(userId: number): Promise<boolean> {
 
 /**
  * 取今日之星，没有则评选（并发安全：确定性哈希 + star.date 唯一键兜底）：
- * 候选 =（少将及以上现役 且 近 30 天登录过）∪（近 30 日破纪录 且 名次上升者），
- * 排除近 30 日已当选者与 7 日内未登录者（2026-11-02 张老师定）；同一天多次请求结果一致
- * （日期哈希），无候选返回 null。
+ * 高级 SUB50 且 7 日内登录者固定 1 份；近 30 日破纪录且在进步榜者按榜内名次、
+ * 当前全国排名线性计份。有照片总份数翻倍，排除近 30 日已当选者与 7 日内未登录者；
+ * 同一天多次请求结果一致（日期哈希），无候选返回 null。
  * viewerUid：当前登录用户（用于带出 myVote；可不传）。
  */
 export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null> {
@@ -220,54 +203,53 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
     };
   }
 
-  // 候选池两路分开计席（十八轮 2026-10-28 张老师定；十九轮同日加进步席位分级）：
-  //   ① 少将及以上现役 且 30 天内登录过（2026-10-26 张老师增列 last_login_time 条件——
-  //      沉睡老将不参选，只约束①路；②路破纪录本身即活跃证明，不另设登录门槛）。恒 1 席。
-  //   ② 30 天内破纪录 ∧ 排名上升（delta>0）现役。席位 = 1 + 进步加成 + 排位加成（十九轮）：
-  //      进步加成（delta = 30 天窗口名次差，封禁修正后）：delta≥200 → +2；delta≥50 → +1；
-  //      排位加成（今日总计时间榜名次）：≤100 → +2（百强仍有进步）；≤500 → +1。
-  //      进步得多 / 排位已高仍进步者，席位更多。理论最高 5 席。
-  //      （登录门槛：②路原不设，2026-11-02 张老师定统一走「7 日内未登录不参选」全局排除。）
-  //   两路**分开计席**：两条都命中的用户席位叠加（不再 UNION 去重合一），
-  //   再叠加头像加成——有头像者全部席位 ×2。
-  // 封禁账号不入池（两路均 JOIN user.status=0；②路 rank_snapshot 残留 delta 的
-  // 被封者一并滤掉，与 /grow 进步榜口径一致）。delta 本身已在快照刷新时做封禁修正
-  // （ranksnap.ts：扣掉「别人被封白捡的名次」），delta>0 即真实名次上升。
-  // 头像加成：有合法头像（/uploads/avatar/%、http 外链、旧站 '1'）者每份席位翻倍——
-  // 鼓励上传真人照片，但不阻断无头像者参选。
-  // rank_snapshot.ranks JSON 里今日名次的 key（如 $."2026-10-28"）。⚠️ 引号必须真实
+  // 2026-11-28 张老师定：废除此前的 delta≥50/200、全国前 100/500 阶梯加成，改线性份数。
+  // grow CTE 先对完整进步榜排名并计数，再用 EXISTS 限定「近 30 天破纪录」——
+  // 这样进步榜名次不会因为是每日一星候选而被重新编号，与进步榜页面严格一致。
+  // 第二项 max(0, 进步榜人数 − 当前全国排名) 防止全国排名靠后时出现负份数。
+  // rank_snapshot.ranks JSON 里今日名次的 key（如 $."2026-11-28"）。⚠️ 引号必须真实
   // 存在于字符串值里且**不带反斜杠**：此处是参数绑定（$queryRawUnsafe 传 ?），
-  // 不走 SQL 字符串转义——原写法 `$.\\"…\\"` 让 MySQL 收到字面 `$.\"2026-10-28\"`，
-  // JSON path 解析器直接报 3143 非法路径（position 16 实证，2026-10-29 线上首页 500）。
-  // 日期 key 含连字符必须引号包裹，故值为带裸双引号的 $."日期"。
+  // 不走 SQL 字符串转义；日期 key 含连字符必须引号包裹。
   const rankPath = `$."${today}"`;
   const rows = await prisma.$queryRawUnsafe<Array<{ id: bigint; seats: number; hasAvatar: number; lastLogin: bigint }>>(
-    `SELECT s.id, 1 AS seats, u.last_login_time AS lastLogin,
+    `WITH grow AS (
+       SELECT r.user,
+              CAST(JSON_UNQUOTE(JSON_EXTRACT(r.ranks, ?)) AS SIGNED) AS today_rank,
+              ROW_NUMBER() OVER (
+                ORDER BY r.delta DESC,
+                         CAST(JSON_UNQUOTE(JSON_EXTRACT(r.ranks, ?)) AS UNSIGNED) ASC
+              ) AS grow_rank,
+              COUNT(*) OVER () AS grow_count
+         FROM rank_snapshot r
+         JOIN \`user\` ru ON ru.id = r.user AND ru.status = 0
+        WHERE r.delta > 0 AND JSON_CONTAINS_PATH(r.ranks, 'one', ?)
+     )
+     SELECT s.id, 1 AS seats, u.last_login_time AS lastLogin,
             CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END AS hasAvatar
        FROM user_scores s
        JOIN \`user\` u ON u.id = s.id AND u.status = 0 AND u.last_login_time >= ?
        WHERE s.exp_time > 0 AND s.exp_time <= ?
      UNION ALL
-     SELECT DISTINCT n.user,
-            1 + CASE WHEN r.delta >= 200 THEN 2 WHEN r.delta >= 50 THEN 1 ELSE 0 END
-              + CASE WHEN CAST(JSON_UNQUOTE(JSON_EXTRACT(r.ranks, ?)) AS UNSIGNED) <= 100 THEN 2
-                     WHEN CAST(JSON_UNQUOTE(JSON_EXTRACT(r.ranks, ?)) AS UNSIGNED) <= 500 THEN 1
-                     ELSE 0 END AS seats,
+     SELECT g.user,
+            (CAST(g.grow_count AS SIGNED) - CAST(g.grow_rank AS SIGNED))
+              + GREATEST(0, CAST(g.grow_count AS SIGNED) - CAST(g.today_rank AS SIGNED)) AS seats,
             u.last_login_time AS lastLogin,
             CASE WHEN u.avatar LIKE '/uploads/avatar/%' OR u.avatar LIKE 'http%' OR u.avatar = '1' THEN 1 ELSE 0 END
-       FROM news n
-       JOIN rank_snapshot r ON r.user = n.user AND r.delta > 0
-       JOIN \`user\` u ON u.id = n.user AND u.status = 0
-       WHERE n.type = 20 AND n.user > 0 AND n.create_time >= ?`,
-    Math.floor(Date.now() / 1000) - 30 * 86400,
+       FROM grow g
+       JOIN \`user\` u ON u.id = g.user AND u.status = 0
+       WHERE EXISTS (
+         SELECT 1 FROM news n
+          WHERE n.user = g.user AND n.type = 20 AND n.create_time >= ?
+       )`,
+    rankPath,
+    rankPath,
+    rankPath,
+    Math.floor(Date.now() / 1000) - 7 * 86400,
     MAJOR_GENERAL_MS,
-    rankPath,
-    rankPath,
     Math.floor(Date.now() / 1000) - 30 * 86400
   );
-  const excluded = await recentStarUserIds(today);
-  // 两路分开计席：同一用户席位跨路累加（UNION ALL 下①路一人一行恒 1 席，
-  // ②路已按 DISTINCT 去重到一人一行、席位由 SQL 分级算出）
+  const excluded = await recentStarUserIds();
+  // 两路分开计份：同一用户跨路累加（①路恒 1 份；②路 EXISTS 保证一人一行）。
   const seen = new Map<number, { seats: number; hasAvatar: number; lastLogin: bigint }>();
   for (const r of rows) {
     const id = N(r.id);
@@ -275,25 +257,31 @@ export async function getTodayStar(viewerUid?: number): Promise<StarInfo | null>
     if (cur) cur.seats += Number(r.seats);
     else seen.set(id, { seats: Number(r.seats), hasAvatar: Number(r.hasAvatar), lastLogin: r.lastLogin });
   }
-  // 全局排除（2026-11-02 张老师定）：30 天内当选过的不参选 + 7 日内未登录过的不参选
+  // 0 份不入袋；再排除 30 天内当选过、7 日内未登录过的玩家。
   const candidates = [...seen.entries()].filter(
-    ([id, { lastLogin }]) => !excluded.has(id) && isLoggedInWithin7Days(lastLogin)
+    ([id, { seats, lastLogin }]) => seats > 0 && !excluded.has(id) && isLoggedInWithin7Days(lastLogin)
   );
   if (!candidates.length) return null;
 
-  // 加权抽签袋（十七轮头像×2 + 十八轮两路分席 + 十九轮进步席位分级）：
-  // 全部席位入袋一次，有头像再整体翻倍；②路单命中 1~5 份，双命中再叠加①路 1 份；
-  // 日期哈希确定性随机（同一天多次请求结果一致，并发重复插入由唯一键兜底）
-  const bag: number[] = [];
-  for (const [id, { seats, hasAvatar }] of candidates) {
-    for (let i = 0; i < seats; i++) bag.push(id);
-    if (hasAvatar) {
-      for (let i = 0; i < seats; i++) bag.push(id);
-    }
-  }
+  // 两路份数累加后，有照片者整体 ×2。线性公式下总份数可能很大，
+  // 用累计权重抽取代替展开抽签袋数组，概率完全等价且内存为 O(候选人数)。
+  // 日期哈希确定性随机（同一天多次请求结果一致，并发重复插入由唯一键兜底）。
+  const weighted = candidates.map(([id, { seats, hasAvatar }]) => ({
+    id,
+    weight: seats * (hasAvatar ? 2 : 1),
+  }));
+  const totalWeight = weighted.reduce((sum, row) => sum + row.weight, 0);
   let hash = 0;
   for (const ch of today) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  const winner = bag[hash % bag.length];
+  let draw = hash % totalWeight;
+  let winner = weighted[weighted.length - 1].id;
+  for (const row of weighted) {
+    if (draw < row.weight) {
+      winner = row.id;
+      break;
+    }
+    draw -= row.weight;
+  }
 
   const now = nowSec();
   try {
