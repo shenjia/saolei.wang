@@ -24,7 +24,6 @@ import { isManager } from "@/lib/config";
 import { TitleSystemProvider } from "@/components/TitleSystemProvider";
 import { resolveTitleSystem, getThunderKingId } from "@/lib/title-system";
 import { getOpenmsLink } from "@/lib/openms";
-import { getTourNavStatus } from "@/lib/tournament";
 import { OpenmsConsentModal } from "@/components/OpenmsConsentModal";
 import { BotChallengeGate } from "@/components/BotChallengeGate";
 import { VsNavLink } from "@/components/VsNewHint";
@@ -87,9 +86,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const avatarUrl = me?.avatarUrl || "/images/player/no.jpg";
   // 开源扫雷网同步征求（2026-11-07）：绑定且未表态才弹提醒条（主键点查，未绑定用户 null 零成本）
   const openmsLink = session ? await getOpenmsLink(session.uid) : null;
-  // header「比赛」导航态（2026-11-22 张老师需求）：有进行中比赛→绿 / 只有未开始→金 /
-  // 都没有→正常灰（60s 缓存，全站顶栏共用一次查询）
-  const tourNav = await getTourNavStatus();
   return (
     <html lang="zh-CN">
       <head>
@@ -134,14 +130,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   <Link prefetch={false} href="/video">录像</Link>
                 </li>
                 {/* 比赛入口（2026-11-13 张老师需求）：公开页，未登录可看（报名需登录）。
-                    2026-11-22 起显示并带状态着色：有进行中比赛绿（.nav_active）、
-                    只有未开始金（.nav_upcoming），均沿用 legacy 级别色板 */}
+                    2026-11-28 张老师定：不再按比赛状态变色（原进行中绿/未开始金下线），
+                    与其他导航项同色 */}
                 <li>
-                  <Link
-                    prefetch={false}
-                    href="/tournaments"
-                    className={tourNav ? `nav_tour_${tourNav}` : undefined}
-                  >
+                  <Link prefetch={false} href="/tournaments">
                     比赛
                   </Link>
                 </li>
@@ -239,10 +231,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 )}
               </ul>
             </div>
-            {/* 半移动/移动版（≤960px）导航：三横线菜单 + 登录头像；桌面由 CSS 隐藏。
-                tourNav 透传给移动端「比赛」项着色（2026-11-22 同桌面口径） */}
+            {/* 半移动/移动版（≤960px）导航：三横线菜单 + 登录头像；桌面由 CSS 隐藏 */}
             <MobileNav
-              tourNav={tourNav}
               user={
                 session
                   ? {

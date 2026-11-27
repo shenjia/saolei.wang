@@ -37,8 +37,8 @@ const SITE_LINKS: { href: string; label: string; loginOnly?: boolean }[] = [
   { href: "/ranking", label: "排行" },
   { href: "/video", label: "录像" },
   { href: "/online", label: "练习" },
-  // 比赛（/tournaments，2026-11-13 张老师需求公开页）；2026-11-22 起显示，
-  // 着色由 layout 服务端传入 tourNav（进行中绿/未开始金，见 mn_site 渲染处）
+  // 比赛（/tournaments，2026-11-13 张老师需求公开页）；2026-11-28 张老师定：
+  // 不再按比赛状态变色，与其他导航项同色
   { href: "/tournaments", label: "比赛" },
   { href: "/vs", label: "胜负", loginOnly: true },
   { href: "/bbs", label: "论坛" },
@@ -71,11 +71,8 @@ function useOutsideClose(onClose: () => void) {
 
 export function MobileNav({
   user,
-  tourNav,
 }: {
   user: MobileNavUser | null;
-  /** header「比赛」导航态（2026-11-22 张老师需求）：layout 服务端传入，着色同桌面 */
-  tourNav?: "active" | "upcoming" | null;
 }) {
   const [siteOpen, setSiteOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
@@ -124,17 +121,12 @@ export function MobileNav({
             {SITE_LINKS.filter((l) => !l.loginOnly || user).map((l) => (
               <li key={l.href}>
                 {/* /titles 文案随观看者称号体系切换（军衔/称号）；
-                    /vs「对决」未看过时挂绿字 class，点击计入 localStorage（移动端无 hover） */}
+                    /vs「对决」未看过时挂绿字 class，点击计入 localStorage（移动端无 hover）。
+                    /tournaments「比赛」2026-11-28 起不再按状态变色，与其他项同色 */}
                 <Link
                   prefetch={false}
                   href={l.href}
-                  className={
-                    l.href === "/tournaments" && tourNav
-                      ? `nav_tour_${tourNav}`
-                      : l.href === "/vs" && vsNew
-                        ? "vs_new_hint"
-                        : undefined
-                  }
+                  className={l.href === "/vs" && vsNew ? "vs_new_hint" : undefined}
                   onClick={l.href === "/vs" ? dismissVsNew : undefined}
                 >
                   {l.href === "/titles" ? <SystemText /> : l.label}
