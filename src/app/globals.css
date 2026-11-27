@@ -19280,6 +19280,11 @@ body #header .nav li a.nav_tour_upcoming:hover,
   color: #b1b1a4; /* 亮灰（2026-11-27 20:54 张老师定：近白太亮，降灰） */
   font-weight: bold;
   text-decoration: none;
+  /* 主播名字号 24px（2026-11-28 01:06 张老师定）：原继承 .live_host 的 15px。
+     行高收到 30px——头像 26px，行内各元素 align-items:center 垂直居中，
+     副标题行整体仍相对 39px 的「旁观」h1 居中 */
+  font-size: 24px;
+  line-height: 30px;
 }
 .live_watch .live_host_name:hover {
   color: #fdc61a;
@@ -19665,29 +19670,99 @@ body #header .nav li a.nav_tour_upcoming:hover,
   box-shadow: 0 0 0 2px rgba(221, 51, 51, 0.2);
   animation: live_pulse 1.4s ease-in-out infinite;
 }
-/* hover 提醒气泡（2026-11-27 21:04 张老师定：保留原 tab 的提示文案）——
-   ::before 已被红点占用，不带箭头贴上方 6px（旧 tab 同款视觉锚定） */
-#online_play .live_viewers_badge::after {
-  content: "如不想被旁观，可在设置中关闭";
+/* hover 旁观者名单（2026-11-28 张老师定）：替代原设置提醒，朝上方弹出；
+   默认军衔降序 5 行，超出用用户主页标识区同款 .dots_more 展开/收起。
+   鼠标移出徽标后由 OnlinePlay 延停 150ms，跨过 6px 间距即可点名单内按钮。
+   ⚠️ 气泡挂在徽标内的 React host（.live_viewers_popover_host）里，而徽标是
+   flex 容器——host 只是末尾一个 0 宽 flex item，气泡会相对 host 而非徽标
+   定位（2026-11-28 01:28 张老师截图报障）。host 用 display:contents，气泡
+   直接以徽标（position:absolute）为定位祖先。
+   居中对齐（01:28 张老师定「气泡应和旁观标签居中对齐」）：left:50% +
+   translateX(-50%)，气泡中心恒对徽标中心；不再用 right:0 右对齐。
+   --pop-shift 由组件在可见时写入（px）：气泡伸出视口时的水平修正量，宽屏
+   溢出为 0 即保持精确居中，仅窄屏出界时平移 */
+#online_play .live_viewers_popover_host {
+  display: contents;
+}
+#online_play .live_viewers_popover {
   position: absolute;
+  left: 50%;
+  /* calc 内 var 无 fallback 时须显式 0px，避免整条 transform 失效 */
+  transform: translateX(calc(-50% + var(--pop-shift, 0px)));
   bottom: calc(100% + 6px);
-  right: 0;
-  white-space: nowrap;
+  z-index: 20;
+  width: max-content;
+  min-width: 250px;
+  max-width: calc(100vw - 24px);
+  white-space: normal;
+  text-align: left;
+  cursor: default;
+}
+#online_play .live_viewers_popover[hidden] {
+  display: none;
+}
+#online_play .live_viewers_card {
+  padding: 6px 10px;
   background: #272822;
   border: 1px solid #656355;
   border-radius: 5px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
   color: #f8f8f2;
   font: 12px/18px Arial, Helvetica, sans-serif;
   letter-spacing: normal;
-  padding: 5px 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s;
-  z-index: 10;
+  text-shadow: none;
 }
-#online_play .live_viewers_badge:hover::after {
-  opacity: 1;
+#online_play .live_viewers_rows.expanded {
+  max-height: min(320px, 60vh);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #656355 #272822;
+}
+#online_play .live_viewer_row {
+  display: flex;
+  align-items: center;
+  /* 间距由各列 margin 控制（2026-11-28 张老师定）：军衔必须紧靠性别标记右侧，
+     不能用统一 gap 把它推开 */
+  min-height: 28px;
+  white-space: nowrap;
+}
+#online_play .live_viewer_name {
+  max-width: 144px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #f2f2ea;
+}
+/* 性别缩小一档（2026-11-28 张老师定）：复用 legacy .gender.small 8px 雪碧图，
+   与姓名之间留 5px；右侧不单独留距——军衔紧跟 */
+#online_play .live_viewer_row .gender.small {
+  margin: 0 0 0 5px;
+  flex: 0 0 auto;
+}
+#online_play .live_viewer_rank {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* 紧靠性别标记右侧（原 margin-left:auto 右对齐已撤）：与性别留 3px */
+  margin-left: 3px;
+}
+#online_play .live_viewer_rank .rank-badge {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+/* 最右侧旁观时长（2026-11-28 张老师定）：暗灰小字不抢主体，auto 顶到行尾 */
+#online_play .live_viewer_since {
+  margin-left: auto;
+  color: #939387;
+  font-variant-numeric: tabular-nums;
+}
+#online_play .live_viewers_state {
+  padding: 7px 4px;
+  color: #939387;
+  text-align: center;
+}
+#online_play .live_viewers_card .more_loader {
+  padding: 5px 0 1px;
 }
 /* 观看页徽标（.live_watchers_badge，LiveWatch JSX）：观众没有主播的旁观
    开关——不出 hover 提醒气泡、不挡其下元素点击。
@@ -19707,9 +19782,6 @@ body #header .nav li a.nav_tour_upcoming:hover,
   padding: 2px 8px;
   font-size: 13px;
   line-height: 16px;
-}
-#online_play .live_viewers_badge.live_watchers_badge::after {
-  content: none;
 }
 /* 全屏态：屏幕右下角（fixed 在 fullscreen 子树内仍相对视口）——
    仅主播练习页徽标（absolute 悬浮于 .op_root）；观看页徽标在标题行流内，

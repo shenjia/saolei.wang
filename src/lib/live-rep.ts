@@ -45,34 +45,55 @@ export const LIVE_STALE_MS = 12_000;
  * （feed touch 写入、user page SSR 读到 0）——globalThis 强制跨 bundle
  * 共享同一 Map。 */
 const VIEWER_TTL_MS = 15_000;
-type LiveViewerGlobal = { __liveViewers?: Map<string, number>; __liveViewersSweep?: number };
+/** 观众在场记录：last＝最近一次拉 feed 的时刻（TTL 判活），first＝本轮连续
+ *  在场的起始时刻（旁观时长口径，2026-11-28 张老师定）。离场超过 TTL 后
+ *  对子被清掉，再看算新一轮——时长从重新进入起算 */
+type LiveViewerSeen = { first: number; last: number };
+type LiveViewerGlobal = { __liveViewers?: Map<string, LiveViewerSeen>; __liveViewersSweep?: number };
 const viewerG = globalThis as typeof globalThis & LiveViewerGlobal;
-const viewerLastSeen: Map<string, number> =
-  viewerG.__liveViewers ?? (viewerG.__liveViewers = new Map<string, number>());
+const viewerLastSeen: Map<string, LiveViewerSeen> =
+  viewerG.__liveViewers ?? (viewerG.__liveViewers = new Map<string, LiveViewerSeen>());
 const lastSweepBox = { get: () => viewerG.__liveViewersSweep ?? 0, set: (v: number) => { viewerG.__liveViewersSweep = v; } };
 
 /** 观众拉 feed 时记录在场（feed 路由调用；主播本人不算观众） */
 export function feedViewerTouch(streamerUid: number, viewerUid: number): void {
-  viewerLastSeen.set(`${streamerUid}:${viewerUid}`, Date.now());
-  /* 惰性清理：整表 15s 扫一次，过期对子离场 */
   const now = Date.now();
+  const key = `${streamerUid}:${viewerUid}`;
+  const prev = viewerLastSeen.get(key);
+  /* 已在册只刷新 last，first 保持首次进入时刻；连续在场不重置计时 */
+  viewerLastSeen.set(key, prev ? { first: prev.first, last: now } : { first: now, last: now });
+  /* 惰性清理：整表 15s 扫一次，过期对子离场 */
   if (now - lastSweepBox.get() < VIEWER_TTL_MS) return;
   lastSweepBox.set(now);
-  for (const [key, t] of viewerLastSeen) {
-    if (now - t <= VIEWER_TTL_MS) continue;
-    viewerLastSeen.delete(key);
+  for (const [k, v] of viewerLastSeen) {
+    if (now - v.last <= VIEWER_TTL_MS) continue;
+    viewerLastSeen.delete(k);
   }
+}
+
+/** 当前活跃观众 uid（主播侧名单气泡用）——与 viewerCount 共用同一 Map、同一 TTL，
+ *  不在线观众不会出现在名单里；数组按 uid 升序，最终展示顺序由名单接口按军衔排。 */
+export function activeViewerIds(streamerUid: number): number[] {
+  return activeViewerSessions(streamerUid).map((s) => s.uid);
+}
+
+/** 当前活跃观众及其连续在场起始时刻（名单气泡「旁观 N 分钟」用）——与 activeViewerIds
+ *  同一判活口径（15s 内拉过 feed），first 即本轮首次进入时刻 */
+export function activeViewerSessions(streamerUid: number): { uid: number; firstAt: number }[] {
+  const prefix = `${streamerUid}:`;
+  const now = Date.now();
+  const out: { uid: number; firstAt: number }[] = [];
+  for (const [key, v] of viewerLastSeen) {
+    if (!key.startsWith(prefix) || now - v.last > VIEWER_TTL_MS) continue;
+    const uid = Number(key.slice(prefix.length));
+    if (Number.isInteger(uid) && uid > 0) out.push({ uid, firstAt: v.first });
+  }
+  return out.sort((a, b) => a.uid - b.uid);
 }
 
 /** 当前观众数（主播侧：心跳响应带回）——按主播聚合最近活跃的独立观众 */
 export function viewerCount(streamerUid: number): number {
-  const prefix = `${streamerUid}:`;
-  const now = Date.now();
-  let n = 0;
-  for (const [key, t] of viewerLastSeen) {
-    if (key.startsWith(prefix) && now - t <= VIEWER_TTL_MS) n++;
-  }
-  return n;
+  return activeViewerIds(streamerUid).length;
 }
 
 /** 与权威 isSafeGameId 同口径：<slot>-<uuid> / <region>-<slot>-<uuid> */
