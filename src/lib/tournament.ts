@@ -1346,7 +1346,7 @@ export interface TourRankRow {
  *  最好成绩行（=第一名，总分口径）。与详情页 getTournamentDetail 全量口径分开——
  *  getTourRanking 的 limit 只裁最终名次行，四表全量扫描（金羊杯 21 届 1.1 万盘级
  *  巨型 IN 回查，单条 SQL 295KB/返回 3 万行）发生在函数内部，靠 limit 治不了根；
- *  真正的降载靠下方 unstable_cache：每场 60s 只付一次全量算分，翻页/加载更多命中缓存 */
+ *  真正的降载靠下方 unstable_cache：每场 300s 只付一次全量算分，翻页/加载更多命中缓存 */
 export interface TourListChartData {
   /** 图表散点（rank 1..30，score 秒） */
   points: TourRow["chartPoints"];
@@ -1382,14 +1382,16 @@ export async function getTourListChart(compId: number): Promise<TourListChartDat
   };
 }
 
-/** 60s 缓存包装（键=compId）：比赛页列表每行一张图表，翻页/加载更多/多人访问
- *  命中同一键——金羊杯四场合计每次渲染 3-5 个巨型 IN 降至 60s 一次。
+/** 300s 缓存包装（键=compId）：比赛页列表每行一张图表，翻页/加载更多/多人访问
+ *  命中同一键——金羊杯四场合计每次渲染 3-5 个巨型 IN 降至 300s 一次。
+ *  60→300（2026-11-28 张老师定）：11-27 巡检实证残余巨型 IN 仍 ~5 条/时（60s 缓存
+ *  重建本底），赛期首屏多 4 分钟延迟可接受。口径未变（纯 TTL），键前缀维持 v2。
  *  v2 键前缀：改口径（如 TOP30→TOP50）必须升版本换键 */
 const fetchTourListChartCached = (compId: number) => {
   const cached = unstable_cache(
     async (cid: number) => getTourListChart(cid),
     ["tour-list-chart-v2", String(compId)],
-    { revalidate: 60 }
+    { revalidate: 300 }
   );
   return cached(compId);
 };
