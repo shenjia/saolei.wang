@@ -11,6 +11,8 @@ import { prisma } from "@/lib/db";
 import {
   tourStatus,
   computePlayerScores,
+  compareTourScores,
+  scoreAppearTimes,
   parseScoreConfig,
   parsePrizePlan,
   scoreModeDesc,
@@ -159,25 +161,25 @@ export default async function AdminCompetitionDetailPage({
       })
     : [];
   const sessBy = new Map(sessRows.map((s) => [Number(s.userId), s]));
-  const scoreMap = computePlayerScores(
-    comp.scoreMode,
-    comp.scoreConfig,
-    allVideos
-      .filter((v) => {
-        if (v.status === 0) return false;
-        if (!comp.windowHours) return true;
-        const s = sessBy.get(Number(v.user));
-        const t = Number(v.createTime);
-        return !!s && t >= Number(s.startTime) && t <= Number(s.endTime);
-      })
-      .map((v) => ({
-        user: v.user,
-        level: v.level,
-        value: metricValueOf(v.id),
-        noRecord: infoMap.get(v.id)?.noRecord ?? false,
-      })),
-    comp.includeLevels.split(",").map((s) => s.trim()).filter(Boolean),
-  );
+  const compVids = allVideos
+    .filter((v) => {
+      if (v.status === 0) return false;
+      if (!comp.windowHours) return true;
+      const s = sessBy.get(Number(v.user));
+      const t = Number(v.createTime);
+      return !!s && t >= Number(s.startTime) && t <= Number(s.endTime);
+    })
+    .map((v) => ({
+      user: v.user,
+      level: v.level,
+      value: metricValueOf(v.id),
+      noRecord: infoMap.get(v.id)?.noRecord ?? false,
+      t: Number(v.createTime), // 同分决胜用：总分出现时刻（2026-11-27 张老师定）
+    }));
+  const includeLv = comp.includeLevels.split(",").map((s) => s.trim()).filter(Boolean);
+  const scoreMap = computePlayerScores(comp.scoreMode, comp.scoreConfig, compVids, includeLv);
+  // 总分出现时刻（同分决胜：总分相同按出现先后排，先出现者排前）
+  const timeMap = scoreAppearTimes(comp.scoreMode, comp.scoreConfig, compVids, includeLv);
 
   // 玩家列表：有成绩在前（按比赛方向排序），无成绩按 UID 排后；内存切页（比赛规模小）
   const playerRows = [...uids.map(Number)]
@@ -190,9 +192,12 @@ export default async function AdminCompetitionDetailPage({
       classic: titleMap.get(uid)?.c ?? null,
       videoCount: allVideos.filter((v) => Number(v.user) === uid).length,
       score: scoreMap.get(uid)?.score ?? null,
+      ps: scoreMap.get(uid) ?? null,
     }))
     .sort((a, b) => {
-      if (a.score != null && b.score != null) return desc ? b.score - a.score : a.score - b.score;
+      // 同分决胜与前台排行榜同口径：总分相同按总分出现先后排（先出现者排前，
+      // 2026-11-27 张老师定）
+      if (a.ps && b.ps) return compareTourScores(a.ps, b.ps, desc, timeMap.get(a.uid), timeMap.get(b.uid));
       if (a.score != null) return -1;
       if (b.score != null) return 1;
       return a.uid - b.uid;

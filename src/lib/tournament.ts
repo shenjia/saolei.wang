@@ -492,20 +492,20 @@ export async function getTourMyStats(uid: number): Promise<TourMyStats> {
         const raw = conf.metric === "3bvs" ? m.bvs : conf.metric === "ioe" ? m.ioe : conf.metric === "thrp" ? m.thrp : m.cp;
         return raw > 0 ? raw * 1000 : 0;
       };
-      const scores = computePlayerScores(
-        comp.scoreMode,
-        comp.scoreConfig,
-        inWin.map((v) => ({
-          user: v.user,
-          level: levelMap.get(v.id) ?? "",
-          value: valueOf(v.id),
-          noRecord: infoMap.get(v.id)?.noRecord ?? false,
-        })),
-        comp.includeLevels.split(",").map((s) => s.trim()).filter(Boolean),
-      );
-      // 名次口径与 getTourRanking 完全一致（排序后 index+1，不合并并列）
+      const compVids = inWin.map((v) => ({
+        user: v.user,
+        level: levelMap.get(v.id) ?? "",
+        value: valueOf(v.id),
+        noRecord: infoMap.get(v.id)?.noRecord ?? false,
+        t: Number(v.createTime),
+      }));
+      const includeLv = comp.includeLevels.split(",").map((s) => s.trim()).filter(Boolean);
+      const scores = computePlayerScores(comp.scoreMode, comp.scoreConfig, compVids, includeLv);
+      const tMap = scoreAppearTimes(comp.scoreMode, comp.scoreConfig, compVids, includeLv);
+      // 名次口径与 getTourRanking 完全一致（排序后 index+1，不合并并列；
+      // 同分按总分出现先后排，2026-11-27 张老师定）
       const sorted = [...scores.entries()].sort((a, b) =>
-        conf.desc ? b[1].score - a[1].score : a[1].score - b[1].score
+        compareTourScores(a[1], b[1], conf.desc, tMap.get(a[0]), tMap.get(b[0]))
       );
       const idx = sorted.findIndex(([u]) => u === uid);
       if (idx >= 0 && (bestRank === null || idx + 1 < bestRank)) bestRank = idx + 1;
@@ -1397,7 +1397,8 @@ const fetchTourListChartCached = (compId: number) => {
 /** 排行榜（张老师 2026-11-18 定：按比赛设定计算成绩排序，不再按单盘最好成绩）——
  *  sum_topn：窗口内录像按 computePlayerScores 同口径算总分（不足 N 局补保底），
  *  videoId 取该玩家窗口内最好一局（按 metric/方向取「最好」）；target_diff 同口径取最小误差。
- *  排序：desc=true 越大越好（总分降序），否则升序。 */
+ *  排序：总分为主，desc=true 越大越好（总分降序），否则升序；同分按总分出现
+ *  先后排（先出现者排前，compareTourScores+scoreAppearTimes，2026-11-27 张老师定）。 */
 /** limit=null 表示不截断（图表用全部有成绩参赛者）；数字仍按名次取前 N（右栏排行榜用 10）。 */
 export async function getTourRanking(compId: number, limit: number | null = 10): Promise<TourRankRow[]> {
   const comp = await prisma.tournament.findUnique({
@@ -1463,17 +1464,17 @@ export async function getTourRanking(compId: number, limit: number | null = 10):
     const raw = metric === "3bvs" ? m.bvs : metric === "ioe" ? m.ioe : metric === "thrp" ? m.thrp : m.cp;
     return raw > 0 ? raw * 1000 : 0;
   };
-  const scores = computePlayerScores(
-    comp.scoreMode,
-    comp.scoreConfig,
-    inWindow.map((r) => ({
-      user: r.user,
-      level: levelMap.get(r.id) ?? "",
-      value: metricValueOf(r.id),
-      noRecord: infoMap.get(r.id)?.noRecord ?? false,
-    })),
-    comp.includeLevels.split(",").map((s) => s.trim()).filter(Boolean),
-  );
+  const tourVids = inWindow.map((r) => ({
+    user: r.user,
+    level: levelMap.get(r.id) ?? "",
+    value: metricValueOf(r.id),
+    noRecord: infoMap.get(r.id)?.noRecord ?? false,
+    t: Number(r.createTime), // 同分决胜用：总分出现时刻（2026-11-27 张老师定）
+  }));
+  const includeLv = comp.includeLevels.split(",").map((s) => s.trim()).filter(Boolean);
+  const scores = computePlayerScores(comp.scoreMode, comp.scoreConfig, tourVids, includeLv);
+  // 总分出现时刻（同分决胜：总分相同按出现先后排，先出现者排前）
+  const tMap = scoreAppearTimes(comp.scoreMode, comp.scoreConfig, tourVids, includeLv);
   if (!scores.size) return [];
   // 代表盘 = 该玩家窗口内最好一局（按 metric/方向；总成绩是多盘合成，链接供看最好盘）
   const bestBy = new Map<number, { time: number; videoId: number }>();
@@ -1484,8 +1485,9 @@ export async function getTourRanking(compId: number, limit: number | null = 10):
     const prev = bestBy.get(uid);
     if (!prev || (desc ? v > prev.time : v < prev.time)) bestBy.set(uid, { time: v, videoId: Number(r.id) });
   }
+  // 排序：总分为主，同分按总分出现先后排（先出现者排前，2026-11-27 张老师定）
   const sorted = [...scores.entries()].sort((a, b) =>
-    desc ? b[1].score - a[1].score : a[1].score - b[1].score
+    compareTourScores(a[1], b[1], desc, tMap.get(a[0]), tMap.get(b[0]))
   );
   const ranked = limit === null ? sorted : sorted.slice(0, limit);
   const uids = ranked.map(([uid]) => BigInt(uid));
@@ -1784,24 +1786,25 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
       const raw = metric === "3bvs" ? m.bvs : metric === "ioe" ? m.ioe : metric === "thrp" ? m.thrp : m.cp;
       return raw > 0 ? raw * 1000 : 0;
     };
-    const scores = computePlayerScores(
-      comp?.scoreMode ?? "",
-      comp?.scoreConfig ?? "",
-      all.map((r) => ({
-        user: r.user,
-        level: levelMap.get(r.id) ?? "",
-        value: allValueOf(r.id),
-        noRecord: infoById.get(r.id)?.noRecord ?? false,
-      })),
-      (comp?.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
-    );
+    const allVids = all.map((r) => ({
+      user: r.user,
+      level: levelMap.get(r.id) ?? "",
+      value: allValueOf(r.id),
+      noRecord: infoById.get(r.id)?.noRecord ?? false,
+      t: Number(r.createTime),
+    }));
+    const includeLv = (comp?.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean);
+    const scores = computePlayerScores(comp?.scoreMode ?? "", comp?.scoreConfig ?? "", allVids, includeLv);
+    const tMap = scoreAppearTimes(comp?.scoreMode ?? "", comp?.scoreConfig ?? "", allVids, includeLv);
     const mine = scores.get(uid);
     if (mine) {
       // 2026-11-22 张老师定：「最好成绩」行展示比赛总分（同排行榜排序口径），
       // hover 气泡展示与排行榜完全一致的计算过程（calc 由 computePlayerScores 产出）
       myScore = mine;
+      // 名次=榜内「严格更好」人数+1（compareTourScores 同分决胜口径与排行榜一致：
+      // 总分相同按总分出现先后排，先出现者排前，2026-11-27 张老师定）
       rank =
-        1 + [...scores.values()].filter((s) => (desc ? s.score > mine.score : s.score < mine.score)).length;
+        1 + [...scores.entries()].filter(([u, s]) => compareTourScores(s, mine, desc, tMap.get(u), tMap.get(uid)) < 0).length;
     } else {
       rank = null;
     }
@@ -1842,6 +1845,8 @@ export async function getMyScoreValues(
   detail: ScoreVideoDetail[];
   /** 本人各级别补保底局数 */
   filled: Record<string, number>;
+  /** 各玩家「总分出现时刻」（同分决胜用，2026-11-27；uid→秒，纯保底玩家不在 Map） */
+  times: Map<number, number>;
 } | null> {
   const comp = await prisma.tournament.findUnique({
     where: { id: BigInt(compId) },
@@ -1917,14 +1922,13 @@ export async function getMyScoreValues(
       value: v,
       noRecord: infoMap.get(r.id)?.noRecord ?? false,
       vid: Number(r.id), // 逐盘明细用（2026-11-24）
+      t: Number(r.createTime), // 同分决胜用：总分出现时刻（2026-11-27 张老师定）
     };
   });
-  const scores = computePlayerScores(
-    comp.scoreMode ?? "",
-    comp.scoreConfig ?? "",
-    vids,
-    (comp.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
-  );
+  const includeLv = (comp.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean);
+  const scores = computePlayerScores(comp.scoreMode ?? "", comp.scoreConfig ?? "", vids, includeLv);
+  // 总分出现时刻（同分决胜：总分相同按出现先后排，先出现者排前）
+  const times = scoreAppearTimes(comp.scoreMode ?? "", comp.scoreConfig ?? "", vids, includeLv);
   let mine = scores.get(uid);
   /* 纯保底补算（2026-11-22 张老师定「保底成绩也应该显示成绩和排名」）：
      computePlayerScores 只为有有效录像的玩家产出（byUserLevel 遍历 valid）——
@@ -1959,6 +1963,7 @@ export async function getMyScoreValues(
     calc: mine ? mine.calc : [],
     detail: mine ? mine.detail : [],
     filled: mine ? mine.filled : {},
+    times,
   };
 }
 
@@ -1985,7 +1990,10 @@ export async function getMyScoreSnapshot(
     select: { scoreMode: true, scoreConfig: true },
   });
   const desc = comp ? parseScoreConfig(comp.scoreMode, comp.scoreConfig)?.desc ?? false : false;
-  const rank = 1 + [...r.scores.values()].filter((s) => (desc ? s.score > r.mine!.score : s.score < r.mine!.score)).length;
+  // 名次=榜内「严格更好」人数+1（compareTourScores 同分决胜，与排行榜口径一致：
+  // 总分相同按总分出现先后排，先出现者排前；纯保底本人无出现时刻恒排有盘玩家后）
+  const rank =
+    1 + [...r.scores.entries()].filter(([u, s]) => compareTourScores(s, r.mine!, desc, r.times.get(u), r.times.get(uid)) < 0).length;
   return { score: r.mine.score, rank, calc: r.mine.calc, detail: r.mine.detail, filled: r.mine.filled };
 }
 
@@ -2813,6 +2821,67 @@ export function computePlayerScores(
     return out;
   }
   return out;
+}
+
+/** 各玩家「当前总分出现时刻」（同分决胜用，2026-11-27 张老师定：总分相同按总分
+ *  出现先后排，先出现者排前——后打出者理论准备时间更充分，先打出的含金量更高）。
+ *  sum_topn/target_diff 的总分都随有效盘单调向好收敛，当前总分首次出现的时刻＝
+ *  最后一次总分变化的录像上传时刻。逐人按时间序做前缀算分、从后向前找最后一个
+ *  改变总分的盘（比赛规模小，逐人 O(n²) 可忽略）。无有效盘（纯保底补算）的玩家
+ *  不在 Map——决胜时由 compareTourScores 视为排在所有有盘玩家之后。 */
+export function scoreAppearTimes(
+  mode: string,
+  cfg: string,
+  vids: (TourScoreVideo & { t: number })[],
+  includeLevels?: readonly string[]
+): Map<number, number> {
+  const out = new Map<number, number>();
+  if (!parseScoreConfig(mode, cfg)) return out;
+  const lvAllowed = includeLevels ? new Set(includeLevels) : null;
+  const lvOn = (lv: string): boolean => !lvAllowed || lvAllowed.has(lv);
+  const byUser = new Map<number, (TourScoreVideo & { t: number })[]>();
+  for (const v of vids) {
+    if (!(v.value > 0) || v.noRecord || !lvOn(v.level)) continue;
+    const uid = Number(v.user);
+    const list = byUser.get(uid);
+    if (list) list.push(v);
+    else byUser.set(uid, [v]);
+  }
+  for (const [uid, list] of byUser) {
+    const asc = list.slice().sort((a, b) => a.t - b.t);
+    const final = computePlayerScores(mode, cfg, asc, includeLevels).get(uid);
+    if (!final) continue;
+    for (let k = asc.length; k >= 1; k--) {
+      const s = computePlayerScores(mode, cfg, asc.slice(0, k), includeLevels).get(uid);
+      if (s && s.score !== final.score) {
+        out.set(uid, asc[k]!.t); // 下标 k 的盘是最后一个改变总分的盘
+        break;
+      }
+    }
+    if (!out.has(uid)) out.set(uid, asc[0]!.t); // 首盘即达最终总分
+  }
+  return out;
+}
+
+/** 排行同分决胜比较器（2026-11-27 张老师定）：总分相同按**总分出现先后**排——
+ *  先出现者排前（后打出者理论准备时间更充分，先打出的含金量更高）；出现时刻
+ *  也相同（同秒批量导入等极端情形）视为并列，不再比级别分量（张老师 19:04 定：
+ *  中高级比拼多余且耗性能，已删）。
+ *  ta/tb=双方总分出现时刻（scoreAppearTimes 产出）；undefined=纯保底无盘玩家，
+ *  恒排在有盘玩家之后。返回负数=a 排前。排行榜/我的名次/参赛记录最高名次/
+ *  后台玩家列表全部走此函数（单一口径）。 */
+export function compareTourScores(
+  a: PlayerScore,
+  b: PlayerScore,
+  desc: boolean,
+  ta?: number,
+  tb?: number
+): number {
+  if (a.score !== b.score) return desc ? b.score - a.score : a.score - b.score;
+  if (ta === undefined && tb === undefined) return 0; // 双方都无盘（纯保底）→ 并列
+  if (ta === undefined) return 1; // 本人无盘（纯保底）→ 排后
+  if (tb === undefined) return -1;
+  return ta - tb; // 总分出现早者排前；同秒并列
 }
 
 /** 成绩展示（2026-11-21 起按 metric 折算；兼容旧签名 fmtScoreMs(ms)＝time 口径） */

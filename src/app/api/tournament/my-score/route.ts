@@ -11,7 +11,7 @@
 import { NextResponse } from "next/server";
 import { getSession, renewSessionIfLow } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getMyScoreValues, parseScoreConfig } from "@/lib/tournament";
+import { compareTourScores, getMyScoreValues, parseScoreConfig } from "@/lib/tournament";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -55,11 +55,13 @@ export async function POST(req: Request) {
   if (r?.mine) {
     score = r.mine.score;
     const desc = parseScoreConfig(c.scoreMode, c.scoreConfig)?.desc ?? false;
-    /* 名次 = 全量榜内严格更好的人数 + 1；纯保底补算的 mine 不在全量 Map
-       （排行榜「无有效录像不上榜」口径不动），但名次仍按其保底总分与榜内
-       严格比较得出——保底总分必然劣于任何实盘组合（配置端保证方向不倒挂），
-       排在所有有盘玩家之后，语义正确 */
-    rank = 1 + [...r.scores.values()].filter((s) => (desc ? s.score > r.mine!.score : s.score < r.mine!.score)).length;
+    /* 名次 = 全量榜内严格更好的人数 + 1（compareTourScores 同分决胜口径与排行榜
+       一致：总分相同按总分出现先后排，先出现者排前，2026-11-27 张老师定）；
+       纯保底补算的 mine 不在全量 Map（排行榜「无有效录像不上榜」口径不动），
+       也无「总分出现时刻」→ 决胜时恒排在有盘玩家之后——保底总分必然劣于任何
+       实盘组合（配置端保证方向不倒挂），语义正确 */
+    rank =
+      1 + [...r.scores.entries()].filter(([u, s]) => compareTourScores(s, r.mine!, desc, r.times.get(u), r.times.get(session.uid)) < 0).length;
   }
 
   const res = NextResponse.json({
