@@ -102,6 +102,13 @@ function writeSndPref(v: boolean) {
 }
 let replaySndOn = readSndPref();
 let sndPopIdx = 0;
+/* 伪直播观看页（2026-11-27）的独立声音开关：观看页设置与录像页的
+   video_replay_snd 各存各的（默认继承练习页 sndFb），引擎读同一模块单例
+   replaySndOn——进观看页时把独立值写入单例（离场随组件卸载即止，
+   不回写 video_replay_snd），出声口径与本页开关即时一致 */
+export function setReplaySndForLive(v: boolean) {
+  replaySndOn = v;
+}
 /* ---- 播放出口（2026-11-13 移动端开声音卡顿修复）----
    旧实现 HTMLAudioElement retrigger（currentTime=0 + play()）在移动端 WebKit
    每次重触发都要走媒体管线 seek+重启，主线程停顿 → 回放 rAF 掉帧「一顿一顿」
@@ -259,6 +266,9 @@ export interface ReplayStats {
   /** ZiNi 下界（2026-11-14 张老师需求：数据面板 Ops 行上方）——引擎初始化时
    *  由 calZini 按雷位现算一次，盘面属性与回放进度无关 */
   zini: number;
+  /** 胜局（2026-11-27 伪直播观看页消费）：引擎重放终态——全部非雷格开出
+   *  即胜（EVF 头部 won 恒 false 导出时，观看页以此为准判「完成/未完成」） */
+  won: boolean;
 }
 
 /* ---- 3BV 结构（练习页 compute3BV 同法）：空格连通域 regions（含边界数字格）、
@@ -354,7 +364,10 @@ function solvedScan(
 
 interface Engine {
   restart: () => void;
-  stop: () => void;
+  /** 停止回放。keepFinal＝true 时**不恢复静态封面**——定格当前终局盘面
+   *  （2026-11-27 伪直播观看页：踩雷局保留已标旗+bmb 炸雷标记、胜局保留
+   *  自动补旗，与练习页终局观感一致；详情页退出回放仍走默认恢复封面） */
+  stop: (keepFinal?: boolean) => void;
   /** 暂停（定格当前盘面与统计） */
   pause: () => void;
   /** 继续播放（已在终点则从头重播） */
@@ -364,6 +377,10 @@ interface Engine {
   /** 播放倍速（2026-11-05 张老师需求）：0.01–16 即时生效；回放时钟仍是权威时间域，
    *  只是 dt 按倍速缩放——事件应用/插值/统计口径全部不变 */
   setSpeed: (v: number) => void;
+  /** 当前播放时刻距最近已应用事件的间隔（百分秒）——伪直播观看页「主播 AFK」
+   *  判定（2026-11-27 21:03 张老师定）：主播开局后中途离开，录像又长又没操作；
+   *  播放中该值持续增长，≥500（5 秒无任何事件）且有新局时直接切局 */
+  idleCsec: () => number;
 }
 
 /** 笑脸状态（十七期：练习页同款语义——按下 ooh / 松开 smile / 终局 win·dead）。
@@ -953,13 +970,23 @@ export function runReplay(opts: {
       cp: crossings,
       flags: playerFlags,
       zini: ziniVal,
+      won, /* 引擎终态（2026-11-27 伪直播观看页消费：真胜局判定——EVF 头部
+              won 恒 false 导出（观看用途），观看页结算标题/评级口径以引擎
+              重放判定为准，不得用 flags 推断） */
     };
   }
-  /* rAF 驱动（九期起支持暂停/继续/拖拽；统计按 ~100ms 节流回传） */
+  /* rAF 驱动（九期起支持暂停/继续/拖拽；统计按 ~100ms 节流回传）。
+     2026-11-27 直播旁观卡顿案（张老师）：后台标签页 rAF 被浏览器**完全
+     暂停**（录像+时间全停）；前台主线程偶发阻塞时 dt 累积、恢复后时间
+     瞬跳而画面没动——混合时钟：可见走 rAF（60fps 顺滑光标），隐藏切
+     setInterval 兜底驱动（后台节流至 ≥1s 仍持续走表，dt 由 performance.now
+     算出无漂移；visibilitychange 即时切换，lastFrame 两域同源时间戳直接
+     沿用）。回放详情页同享：后台标签不暂停播放（音频/计时照走） */
   let evIdx = 0;
   let curCsec = 0;
   let playing = false;
   let rafId: number | null = null;
+  let bgTimerId: number | null = null;
   let lastFrame = 0;
   let lastStatTs = 0;
   /* 播放倍速（2026-11-05 张老师需求）：tick 的 dt 按倍速缩放，默认恒为 1x；
@@ -982,16 +1009,33 @@ export function runReplay(opts: {
   function sndChord() {
     if (!sndMute) playSnd("/sounds/chord.mp3");
   }
+  /* 后台兜底驱动（2026-11-27 张老师卡顿案）：隐藏时 rAF 不跑——interval
+     继续走表。后台被浏览器节流到 ≥1s 一跳，dt 按 performance.now 实算，
+     恢复前台无跳变 */
+  function startBgTimer() {
+    if (bgTimerId !== null) return;
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+    bgTimerId = window.setInterval(() => { if (playing) tick(performance.now()); }, 250);
+  }
+  function stopBgTimer() {
+    if (bgTimerId === null) return;
+    window.clearInterval(bgTimerId);
+    bgTimerId = null;
+    if (playing) rafId = requestAnimationFrame(tick);
+  }
   function setPlaying(v: boolean) {
     playing = v;
     if (v) {
       cancelGlide(); // 播放接管光标：滑行动画立即让位（tick 每帧 interpCursor）
       if (curCsec >= data.totalCsec) resetReplay();
       lastFrame = 0;
-      rafId = requestAnimationFrame(tick);
-    } else if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
+      /* 起播选驱动：隐藏态（旁观页后台挂着等开播）直接 interval——
+         rAF 起了也永远不回调，播放会凭空卡死 */
+      if (document.hidden) startBgTimer();
+      else rafId = requestAnimationFrame(tick);
+    } else {
+      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+      if (bgTimerId !== null) { window.clearInterval(bgTimerId); bgTimerId = null; }
     }
   }
   function resetReplay() {
@@ -1182,11 +1226,20 @@ export function runReplay(opts: {
       lastStatTs = ts;
       onStats(buildStats());
     }
-    rafId = requestAnimationFrame(tick);
+    /* 下一帧调度：interval 驱动接管期间 rAF 不重复排队（双驱动并发会加速） */
+    if (bgTimerId === null) rafId = requestAnimationFrame(tick);
   }
   resetReplay();
   onFace?.("smile"); // 起播复位笑脸
   setPlaying(true);
+  /* 前后台驱动切换（2026-11-27 张老师卡顿案）：隐藏→interval 兜底，
+     可见→回 rAF（lastFrame 两域同源时间戳直接沿用，dt 无缝） */
+  const onVisChange = () => {
+    if (!playing) return;
+    if (document.hidden) startBgTimer();
+    else stopBgTimer();
+  };
+  document.addEventListener("visibilitychange", onVisChange);
   onStats(buildStats()); // 起播即出面板（全 0 值），不等首帧
   return {
     restart() {
@@ -1198,7 +1251,7 @@ export function runReplay(opts: {
       setPlaying(true);
       onStats(buildStats());
     },
-    stop() {
+    stop(keepFinal = false) {
       setPlaying(false);
       cancelGlide();
       curEl.remove();
@@ -1207,12 +1260,15 @@ export function runReplay(opts: {
       window.removeEventListener("resize", scheduleRemeasure);
       window.removeEventListener("wheel", scheduleRemeasure, { capture: true } as EventListenerOptions);
       window.clearInterval(zoomPoll);
+      document.removeEventListener("visibilitychange", onVisChange);
       if (remeasureRaf !== null) {
         cancelAnimationFrame(remeasureRaf);
         remeasureRaf = null;
       }
       /* 静态地图恢复：saved 类名回写 + 清内嵌 SVG（旧位图棋盘红雷残留）+
-         覆盖层按初始 board 串恢复贴图（雷=b 未开面，与 Board 静态直出一致） */
+         覆盖层按初始 board 串恢复贴图（雷=b 未开面，与 Board 静态直出一致）。
+         keepFinal＝跳过恢复（伪直播观看页终局定格：旗/炸雷标记/胜局补旗保留） */
+      if (keepFinal) return;
       for (let i = 0; i < N; i++) {
         const td = cellTd(i);
         if (td.className !== saved[i]) td.className = saved[i];
@@ -1368,6 +1424,13 @@ export function runReplay(opts: {
     setSpeed(v: number) {
       speed = Number.isFinite(v) && v > 0 ? v : 1;
     },
+    idleCsec() {
+      /* 距最近已应用事件的间隔：evIdx 是下一未应用事件游标——最后已应用
+         事件＝evs[evIdx-1]（播完全部事件时钳到最后一条）。事件以应用为准
+         （不含未到达的未来事件）：播放中该值随 curCsec 推进而单调增长 */
+      const lastEv = evIdx > 0 ? evs[Math.min(evIdx, evs.length) - 1].csec : 0;
+      return Math.max(0, curCsec - lastEv);
+    },
   };
 }
 
@@ -1516,6 +1579,7 @@ function runPlayGame(opts: {
   /* ---- 对局状态 ---- */
   let started = false;
   let over = false;
+  let playWon = false; /* 胜局（buildStats.won 透出——试玩实时面板/终局消费 */
   let openedSafe = 0;
   const totalSafe = N - mineCount;
   let curCsec = 0; // 首击起计时（练习页同款：百分秒）
@@ -1567,6 +1631,7 @@ function runPlayGame(opts: {
       cp: playCrossings,
       flags,
       zini: ziniVal,
+      won: playWon, /* 试玩终态（PlayResult.won 同源判定，emitStats 时随帧带出） */
     };
   }
   function emitStats() {
@@ -1724,6 +1789,7 @@ function runPlayGame(opts: {
     /* 被踩中的雷：红底雷（#cell-mine-bomb，与练习页踩雷同图；bc 位图是灰雷） */
     paintCellCls(cellTd(hit), "bmb");
     onFace("dead");
+    playWon = false;
     emitFinish(false); // 二十期：全屏层据此出「我的评级」
   }
   function checkWin() {
@@ -1738,6 +1804,7 @@ function runPlayGame(opts: {
       }
     led("mines", 0);
     onFace("win");
+    playWon = true;
     emitFinish(true); // 二十期：全屏层据此出「我的评级」
   }
   function paintCellCls(td: HTMLTableCellElement, cls: string) {

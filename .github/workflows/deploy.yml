@@ -187,10 +187,12 @@ jobs:
             --exclude='videos/' \
             --exclude='public/uploads/' \
             --exclude='public/bbs-img/' \
+            --exclude='data/' \
             --exclude='.deployed-commit' \
             --filter='protect videos/***' \
             --filter='protect public/uploads/***' \
             --filter='protect public/bbs-img/***' \
+            --filter='protect data/***' \
             --filter='protect public/download/Metasweeper-*.dmg' \
             ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/
 

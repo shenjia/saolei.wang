@@ -19107,3 +19107,597 @@ body #header .nav li a.nav_tour_upcoming:hover,
 #follow_list .fol_limit_note .fol_limit_donate:hover {
   text-decoration: underline;
 }
+
+/* ===== 伪直播观看页（2026-11-27 新功能，dev 预览；同日三版）=====
+   版式与练习页 /online 完全同款：#page.main > .box 深底圆角卡、
+   .news_head 黄 h1 标题「旁观」+ 副标题「YYY正在练习」（头像/中文名/
+   性别/称号，筛选器字号）+ 横线装饰（筛选器同款）+ 直播红点动态图标、
+   右上 .gicons 只留设置齿轮+全屏两颗 gicon（复用 #online_play 现成规则）、
+   .gwrap 银灰游戏窗（计数条 LED 雷数/笑脸/LED 计时 + gframe 棋盘）。
+   游戏窗规则自 #online_play 同名一组 1:1 移植（.vprfs 全屏层同款先例）——
+   scope 改 .live_watch .live_game，声明同值不改。无进度条、无「回放/
+   上一局」字样。终局（数据统计开关开）左统计/右结算面板。 */
+.live_watch .live_head .gicons {
+  margin-left: auto;
+  align-self: center;
+}
+/* 设置浮窗：直接复用练习页 #online_play .gsettings 全套现成规则
+   （news_head position:relative 锚 + open 显隐 + gs_row/gsw/gs_zoom 全套）。
+   live_gsettings 只留锚定微调：顶部间距与练习页一致，无额外样式 */
+.live_watch .live_gsettings {
+  top: calc(100% + 10px);
+}
+/* 「对局中」按钮（2026-11-27 19:06 张老师定）：金底降亮度 + 文字后转圈
+   （toast_spin 同款造型，色随结算面板金字 #fdc61d）。
+   20:54 张老师定：转圈 absolute 锚 .grb_txt（文字包 span）右缘——
+   不占 flex 流宽，按钮文字与无图标时完全同位水平居中 */
+#online_play .gresult .grb.grb_dim,
+#gr_modal .grb.grb_dim {
+  opacity: 0.55;
+}
+#online_play .gresult .grb,
+#gr_modal .grb {
+  position: relative;
+}
+#online_play .gresult .grb .grb_txt,
+#gr_modal .grb .grb_txt {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+#online_play .gresult .grb .grb_spin,
+#gr_modal .grb .grb_spin {
+  position: absolute;
+  left: calc(100% + 5px);
+  top: 50%;
+  /* 垂直居中用 margin 负值，不用 translateY（2026-11-27 张老师报「转圈不转、
+     上下跳动」根因）：旋转动画 toast_spin 的关键帧写的是整个 transform，
+     运行时会把静态的 translateY(-50%) 整个覆盖掉——圆圈每帧在「居中」与
+     「top:50% 起点」之间跳，看起来就是上下抖而不是转。
+     负值取盒总高的一半：content-box，14px + 上下 2px 边框 = 18px */
+  margin-top: -9px;
+  margin-left: 0;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(253, 198, 29, 0.25);
+  border-top-color: #fdc61d;
+  border-radius: 50%;
+  animation: toast_spin 0.72s linear infinite;
+}
+/* ---- 游戏窗（#online_play 同名规则 1:1 移植，scope .live_watch .live_game）---- */
+.live_watch .live_game {
+  text-align: center;
+}
+.live_watch .live_game .gwrap {
+  position: relative;
+  display: inline-block;
+  padding: 9px;
+  background: silver;
+  border: 3px solid;
+  border-color: #fff #7b7b7b #7b7b7b #fff;
+  text-shadow: none;
+  text-align: left;
+}
+.live_watch .live_game .gframe {
+  display: inline-block;
+}
+.live_watch .live_game .gbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px;
+  margin-bottom: 9px;
+  background: silver;
+  border: 2px solid;
+  border-color: #7b7b7b #fff #fff #7b7b7b;
+  width: 0;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+.live_watch .live_game .ledc {
+  display: block;
+  width: 41px;
+  height: 25px;
+  flex: 0 0 auto;
+}
+.live_watch .live_game .face {
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+  line-height: 0;
+  flex: 0 0 auto;
+}
+.live_watch .live_game .face svg {
+  pointer-events: none;
+}
+.live_watch .live_game .gboard_wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.live_watch .live_game .gboard_wrap::-webkit-scrollbar {
+  display: none;
+}
+.live_watch .live_game .gboard_wrap .board {
+  position: relative;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  background: #808080;
+}
+.live_watch .live_game .gboard_wrap .board td {
+  background: none;
+}
+/* 回放光标（引擎注入 .replay_cursor）：flopplayer 同款鼠标箭头，
+   练习页排布口径——挂 wrap 顶层，坐标系随 zoom 域 */
+.live_watch .live_game .replay_cursor {
+  z-index: 4;
+}
+/* 直播状态行已撤（2026-11-27 15:15 张老师定：底部「画面同步中…」文案位置去掉） */
+/* ---- 四版（2026-11-27 张老师定）：标题行「旁观」+ 副标题 ---- */
+/* 副标题行：YYY正在练习（头像/中文名/拼音/性别/军衔徽章+称号），筛选器字号 15px。
+   军衔徽章与称号文字同色无边框；直播红点紧靠「正在练习」右侧 */
+.live_watch .live_host {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 15px;
+  color: #939387;
+  /* 与「旁观」标题垂直居中（2026-11-27 14:18 张老师定）：h1 行高 39px，
+     副标题行相对其居中（news_head 的 flex-end 底对齐被覆盖） */
+  align-self: center;
+  white-space: nowrap;
+}
+/* 旁观数（红点后）：数字亮灰 #b1b1a4 加粗、其余文字深灰 #636359 */
+.live_watch .live_viewers {
+  font-size: 15px;
+  color: #636359;
+  white-space: nowrap;
+}
+.live_watch .live_viewers b {
+  color: #b1b1a4;
+  font-weight: bold;
+}
+.live_watch .live_avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 3px;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+.live_watch .live_avatar.avatar {
+  /* DefaultAvatar small 档：升到 26px 与行高对齐 */
+  width: 26px;
+  height: 26px;
+}
+.live_watch .live_host_name {
+  color: #b1b1a4; /* 亮灰（2026-11-27 20:54 张老师定：近白太亮，降灰） */
+  font-weight: bold;
+  text-decoration: none;
+}
+.live_watch .live_host_name:hover {
+  color: #fdc61a;
+}
+.live_watch .live_host_pinyin {
+  font-size: 13px;
+  color: #b1b1a4;
+}
+.live_watch .live_host .gender {
+  margin: 0;
+  flex: 0 0 auto;
+}
+.live_watch .live_host_title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.live_watch .live_host_title .rank-badge {
+  width: 18px;
+  height: 18px;
+}
+.live_watch .live_host_playing {
+  margin-left: 4px;
+  color: #939387; /* 「正在参加」前缀暗灰（2026-11-27 20:54 张老师定） */
+  white-space: nowrap;
+}
+/* 比赛全称链接（20:54 张老师定：前缀不是链接，链接只包比赛名）——
+   近白正文、hover 金（站内链接惯例） */
+.live_watch .live_host_playing .live_comp_link {
+  color: #f2f2ea;
+  text-decoration: none;
+}
+.live_watch .live_host_playing .live_comp_link:hover {
+  color: #fdc61a;
+}
+/* 直播红点：紧靠「正在练习」右侧，动态脉冲；未开播灰态静止 */
+.live_watch .live_host .live_dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e33;
+  box-shadow: 0 0 0 3px rgba(221, 51, 51, 0.18);
+  animation: live_pulse 1.4s ease-in-out infinite;
+  flex: 0 0 auto;
+  margin-left: 2px;
+}
+.live_watch .live_host .live_dot.dim {
+  background: #656355;
+  box-shadow: none;
+  animation: none;
+}
+/* ---- 终局面板（四版）：完全复用练习页 .greport/.gresult 悬浮样式 ----
+   （#online_play 现成规则 + .show 显隐；定位由 LiveWatch 内 place() 摆放，
+   悬浮在 #game_area 上不挤占游戏区空间。窄屏 <960 时 .show 不生效＝
+   练习页同口径降级为不显示侧板，倒计时仍走） */
+.live_watch .live_report,
+.live_watch .live_result {
+  position: absolute;
+}
+.live_watch .live_report .gv {
+  text-align: right;
+}
+/* ---- 未关注引导态（2026-11-27 张老师定）：「XXX没有在练习」+ 关注按钮 ----
+   主播离开（stopped）整页切换也用本版式（LiveWatch 内联渲染，box id 仍
+   #online_play——本组规则原样生效）。
+   13:48 张老师定：去掉「旁观」标题——只留副标题行 + 按钮/文案（上下留白保留
+   防扁平）。⚠️ padding 压过 body #page .box 的 16px 14px（2 特异性） */
+.live_gate {
+  padding: 64px 30px 60px !important;
+  text-align: center;
+}
+.live_gate .live_gate_title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 44px;
+}
+.live_gate .live_avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+.live_gate .live_gate_name {
+  color: #f2f2ea;
+  font-size: 24px;
+  font-weight: bold;
+  text-decoration: none;
+}
+.live_gate a.live_gate_name:hover {
+  color: #fdc61a;
+}
+.live_gate .live_gate_rank {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.live_gate .live_gate_rank .rank-badge {
+  width: 26px;
+  height: 26px;
+}
+/* 军衔字号与姓名同大（2026-11-27 13:02 张老师定），配色 inline 传入 */
+.live_gate .live_gate_rank_name {
+  font-size: 24px;
+  font-weight: bold;
+  line-height: 30px;
+}
+.live_gate .live_gate_rest {
+  color: #b1b1a4;
+  font-size: 20px;
+}
+.live_gate .live_gate_action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+/* 引导页关注按钮常驻可见（覆盖 .fol_btn 的 hover-浮现形态——引导页没有
+   头像 hover 宿主，按钮直接静态大号显示；尺寸对齐站内次级按钮观感） */
+.live_gate .fol_wrap {
+  position: static;
+}
+.live_gate .fol_btn {
+  position: static;
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  height: 26px;
+  line-height: 24px;
+  font-size: 13px;
+  padding: 0 14px;
+  border-radius: 4px;
+}
+.live_gate .live_gate_tip {
+  color: #939387;
+  font-size: 14px;
+}
+/* 网页全屏：直接复用练习页 op-webfs 全套基建（#online_play > div.op-webfs
+   fixed 铺满 + html.op-webfs 隐藏站头页脚，见 10546 起规则段，此处零新增）。 */
+
+/* 用户主页直播标记（2026-11-27 dev 预览；15:04 张老师定改版；15:22 定骑线）：
+   骑在头像左上角边线上——徽标高 20px（padding 2×2 + 行高 16），上面一半
+   高度（10px）露在头像顶边外，左侧同样 10px 在头像左边外。锚点是头像
+   容器（fol_wrap / avatar_anchor，均 relative），文案「在线练习中」/
+   「在线练习中，x人正在旁观」 */
+#user_view .info .user_live_badge {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: #e33;
+  color: #fff;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+#user_view .info .user_live_badge:hover {
+  background: #c22;
+  color: #fff;
+  text-decoration: none;
+}
+/* 自己主页：SelfAvatar 外的 relative 锚（接管原 avatar_slot 的 float） */
+#user_view .info .avatar_anchor {
+  position: relative;
+  float: left;
+  margin-right: 15px;
+}
+#user_view .info .avatar_anchor .avatar_slot {
+  float: none;
+  margin-right: 0;
+}
+.user_live_dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff;
+  animation: live_pulse 1.4s ease-in-out infinite;
+}
+@keyframes live_pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+
+/* ---- 粉丝端「正在练习」通知气泡（2026-11-27 张老师需求）----
+   右下角 fixed 悬浮卡片：主体一行（头像/姓名/性别/军衔徽章+配色/「正在练习」
+   + 红点脉冲），下沿深灰小字「点击去旁观」；hover 悬停不打断 15s 自动淡出，
+   点击新标签打开旁观并永久不再弹该玩家。z-index 低于 toast(60)——提示优先 */
+.live_notify {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 18px 9px;
+  background: #272822;
+  border: 1px solid #656355;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  user-select: none;
+  animation: live_notify_in 0.25s ease-out;
+  text-shadow: none;
+}
+@keyframes live_notify_in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+/* 渐隐退场（2026-11-27 14:46 张老师定）：消失时 0.25s 淡出再卸载——
+   组件 closing 态挂本类，动画 forwards 保持终态，超时后 React 卸载 */
+.live_notify.closing {
+  animation: live_notify_out 0.25s ease-in forwards;
+}
+@keyframes live_notify_out {
+  from { opacity: 1; }
+  to { opacity: 0; transform: translateY(8px); }
+}
+.live_notify .live_notify_main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  color: #f2f2ea;
+  white-space: nowrap;
+}
+.live_notify .live_notify_avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+.live_notify .live_notify_name {
+  font-weight: bold;
+}
+.live_notify .live_notify_main .gender {
+  margin: 0;
+  flex: 0 0 auto;
+}
+.live_notify .live_notify_rank {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.live_notify .live_notify_rank .rank-badge {
+  width: 15px;
+  height: 15px;
+}
+.live_notify .live_notify_rank_name {
+  font-size: 14px;
+  font-weight: bold;
+}
+.live_notify .live_notify_playing {
+  color: #b1b1a4;
+  margin-left: 2px;
+}
+.live_notify .live_notify_dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e33;
+  box-shadow: 0 0 0 3px rgba(221, 51, 51, 0.18);
+  animation: live_pulse 1.4s ease-in-out infinite;
+  flex: 0 0 auto;
+  margin-left: 2px;
+}
+.live_notify .live_notify_hint {
+  margin: 0;
+  display: flex; /* 两端同行（2026-11-27 14:33 张老师定）：左「去旁观/x人在旁观」右「今日不再提醒」 */
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  color: #636359;
+  font-size: 12px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+/* hover 卡片（主体行）时左侧文案变绿（14:33 张老师定）——链接本体 hover
+   优先级更高（玫瑰红），用 :not(.live_notify_mute:hover) 区分 */
+.live_notify:hover .live_notify_hint {
+  color: #a6e22e;
+}
+/* 「N人正在旁观」整段深灰（2026-11-27 14:46 张老师定）：数字不再单独
+   亮灰加粗，与文字一段完整渲染、同色 */
+/* 「今日不再提醒」链接（14:16/14:33 张老师定）：深灰、hover 变玫瑰红
+   （f92672 站内玫瑰红）；点击后该玩家 24h 内不再弹练习提醒 */
+.live_notify .live_notify_mute {
+  margin-left: auto;
+  color: #636359;
+  font-size: 12px;
+  line-height: 14px;
+  text-decoration: none;
+  text-shadow: none;
+}
+.live_notify .live_notify_mute:hover {
+  color: #f92672;
+  text-decoration: none;
+}
+/* hover 卡片主体时「今日不再提醒」保持深灰（21:28 张老师定：不应与左侧
+   「点击去旁观」同时变绿）——盖过 hint 的继承与任何全局 a 色污染 */
+.live_notify:hover .live_notify_mute {
+  color: #636359;
+}
+/* hover「今日不再提醒」时左侧文案压回深灰（21:28 张老师定）——:has 特异性
+   高于 .live_notify:hover .live_notify_hint 的变绿规则 */
+.live_notify .live_notify_hint:has(.live_notify_mute:hover) {
+  color: #636359;
+}
+.live_notify:hover {
+  border-color: #939387;
+}
+
+/* 「隐身模式」行（2026-11-27 22:14 张老师定）：替代「允许旁观」——非赞助用户
+   （player.sponsor=false，SSR 按 donate 表赞助金额>0 判定）整行暗灰 + 开关
+   禁用（disabled 由组件 effect 下发）；tip 括号金字＝#fdc61d（站内金） */
+#online_play .gsettings .gs_row.gs_dim .gs_name {
+  color: #636359;
+}
+#online_play .gsettings .gs_row.gs_dim .gsw {
+  opacity: 0.45;
+}
+#online_play .gsettings .gs_row.gs_dim .tip {
+  color: #636359;
+}
+#online_play .gsettings .gs_row.gs_dim .tip .tip_gold {
+  color: #8a7a33;
+}
+#online_play .gsettings .tip .tip_gold {
+  color: #fdc61d;
+}
+/* 「x人正在旁观」悬浮徽标（2026-11-27 20:37 张老师定，替代原「自定义」tab 占位
+   方案——比赛模式隐藏自定义 tab 时看不到旁观数，且不该抢常用入口的文案）：
+   主板块（#game_area）右下角悬浮，1px 深灰圆角矩形包裹 + 红点 + 「x人正在
+   旁观」。全屏三形态（原生 requestFullscreen / 网页 op-webfs / 伪全屏
+   op-fakefs）宿主都铺满视口 → fixed 贴屏幕右下角（fixed 在 fullscreen 子树
+   内仍相对视口）。节点由心跳响应命令式渲染（OnlinePlay paintLiveViewersBadge），
+   G12 已 registerOwn 入册（反作弊 #game_area 直子观察器放行，bvwall 同口径）。
+   ⚠️ 显式 display 会压过 UA 的 [hidden]{display:none}（2026-11-13 级别 tab
+   同款坑实证）——必须补 [hidden] 规则，否则空徽标+红点常驻 */
+#online_play .live_viewers_badge {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #656355;
+  border-radius: 4px;
+  color: #b1b1a4;
+  font: 12px/18px Arial, Helvetica, sans-serif;
+  letter-spacing: normal;
+  white-space: nowrap;
+  z-index: 5;
+}
+#online_play .live_viewers_badge[hidden] {
+  display: none;
+}
+#online_play .live_viewers_badge::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e33;
+  box-shadow: 0 0 0 2px rgba(221, 51, 51, 0.2);
+  animation: live_pulse 1.4s ease-in-out infinite;
+}
+/* hover 提醒气泡（2026-11-27 21:04 张老师定：保留原 tab 的提示文案）——
+   ::before 已被红点占用，不带箭头贴上方 6px（旧 tab 同款视觉锚定） */
+#online_play .live_viewers_badge::after {
+  content: "如不想被旁观，可在设置中关闭";
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  white-space: nowrap;
+  background: #272822;
+  border: 1px solid #656355;
+  border-radius: 5px;
+  color: #f8f8f2;
+  font: 12px/18px Arial, Helvetica, sans-serif;
+  letter-spacing: normal;
+  padding: 5px 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  z-index: 10;
+}
+#online_play .live_viewers_badge:hover::after {
+  opacity: 1;
+}
+/* 观看页徽标（.live_watchers_badge，LiveWatch JSX）：观众没有主播的旁观
+   开关——不出 hover 提醒气泡、不挡其下元素点击 */
+#online_play .live_viewers_badge.live_watchers_badge {
+  pointer-events: none;
+}
+#online_play .live_viewers_badge.live_watchers_badge::after {
+  content: none;
+}
+/* 全屏态：屏幕右下角（fixed 在 fullscreen 子树内仍相对视口） */
+html.op-webfs #online_play .live_viewers_badge,
+html.op-fakefs #online_play .live_viewers_badge,
+#online_play .op_root:fullscreen .live_viewers_badge {
+  position: fixed;
+}

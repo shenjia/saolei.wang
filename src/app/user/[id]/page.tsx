@@ -15,6 +15,7 @@ import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { isLiveNow, viewerCount, getState } from "@/lib/live-rep";
 import {
   getUserRanks,
   getVideoList,
@@ -285,6 +286,16 @@ export default async function UserViewPage({
     session && !isSelf ? isFollowing(session.uid, userId) : Promise.resolve(false),
   ]);
 
+  // 伪直播入口（2026-11-27 上线）：主播正在排行局中且访客是粉丝（或主播本人）
+  // 时显示。服务端 rep 拉取另有粉丝闸，这里只控入口。LIVE_ENABLED=0 可紧急关闭。
+  const liveVisible = process.env.LIVE_ENABLED !== "0"
+    && isLiveNow(userId) && (isSelf || viewerFollowing);
+  /* 旁观数（2026-11-27 15:04 张老师定）：>0 时徽标文案带「，x人旁观」 */
+  const liveViewers = liveVisible ? viewerCount(userId) : 0;
+  /* 比赛模式（2026-11-27 20:30 张老师定）：徽标文案「在线练习中」换「在线比赛中」
+     ——state 心跳落盘的 compId（练习页 comp.id 随心跳透传） */
+  const liveInComp = liveVisible ? !!getState(userId)?.compId : false;
+
   // 个人资料无可展示字段时整个版块隐藏（2026-09-23 张老师要求）
   // 2026-10-22「标识」行（user_sig 录像标识文字）也算可展示内容——
   // 有标识但没填资料的老用户，个人资料版块同样显示
@@ -350,19 +361,37 @@ export default async function UserViewPage({
           {/* 自己的主页：头像可点，点击直接弹文件选择 + 方形裁剪浮窗（不跳账号中心）。
               别人的主页保持原样（裸 <img>，无链接无蒙层），不改动既有 DOM 与样式。 */}
           {isSelf ? (
-            <SelfAvatar
-              src={photo}
-              alt={user.chineseName}
-              pending={avatarPending}
-              // ⚠️ 只在解析后确实落到默认图时才传 defaultSex（2026-11-11 修复：
-              //   此前无条件传 sex，军衔制下 SelfAvatar 会拿军装默认头像顶掉
-              //   真实上传头像——自己看自己主页头像「消失」，人神体系正常）。
-              //   与 account/profile 的 isDefaultAvatar 门控同语义。
-              defaultSex={photo === DEFAULT_AVATAR ? user.sex : undefined}
-            />
+            /* avatar_anchor：给 SelfAvatar（内部 button 不可嵌交互元素）套
+               relative 容器，供直播徽标骑线定位（2026-11-27 15:22 张老师定） */
+            <span className="avatar_anchor">
+              <SelfAvatar
+                src={photo}
+                alt={user.chineseName}
+                pending={avatarPending}
+                // ⚠️ 只在解析后确实落到默认图时才传 defaultSex（2026-11-11 修复：
+                //   此前无条件传 sex，军衔制下 SelfAvatar 会拿军装默认头像顶掉
+                //   真实上传头像——自己看自己主页头像「消失」，人神体系正常）。
+                //   与 account/profile 的 isDefaultAvatar 门控同语义。
+                defaultSex={photo === DEFAULT_AVATAR ? user.sex : undefined}
+              />
+              {/* 直播标记（2026-11-27 15:04 张老师定；15:22 定骑线）：头像左上角
+                  骑线徽标（absolute 挂头像容器）；文案「在线练习中」/「，x人旁观」 */}
+              {liveVisible && (
+                <Link href={`/live/${userId}`} className="user_live_badge" prefetch={false}>
+                  <span className="user_live_dot" aria-hidden="true" />
+                  {liveInComp ? "在线比赛中" : "在线练习中"}{liveViewers > 0 ? `，${liveViewers}人旁观` : ""}
+                </Link>
+              )}
+            </span>
           ) : (
             <span className="fol_wrap">
               {photoImg}
+              {liveVisible && (
+                <Link href={`/live/${userId}`} className="user_live_badge" prefetch={false}>
+                  <span className="user_live_dot" aria-hidden="true" />
+                  {liveInComp ? "在线比赛中" : "在线练习中"}{liveViewers > 0 ? `，${liveViewers}人旁观` : ""}
+                </Link>
+              )}
               {/* 关注按钮（2026-11-18）：hover 头像浮现正下边缘；自己看自己不渲染 */}
               <AvatarFollowBtn uid={userId} sex={user.sex} loggedIn={!!session} following={viewerFollowing} />
             </span>

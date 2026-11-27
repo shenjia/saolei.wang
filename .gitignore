@@ -55,5 +55,9 @@ next-env.d.ts
 # 论坛外链图本地化资产（2026-10-22 批量下载转 WebP，运行时资产，同 uploads 不入仓）
 /public/bbs-img/
 
+# 伪直播 rep 存储（2026-11-27 运行时数据不入仓；⚠️ 必须留在 public 之外——
+# pending 含进行中局完整雷位，public 下会被静态直下泄露，见 src/lib/live-rep.ts 头注）
+/data/
+
 # 本地工作档案（AI 会话记忆，含内部工作细节，不入公开仓）
 /.workbuddy/
