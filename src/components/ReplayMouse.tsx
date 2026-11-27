@@ -385,7 +385,7 @@ export function ReplayMouseIndicator({
     <div className="replay_key_panel" ref={panelRef} data-testid="replay-key-panel" onClick={(e) => e.stopPropagation()}>
       <div className="gr_title">
         <span>按键记录</span>
-        <span className="gr_hint">支持鼠标滚轮/方向键导航</span>
+        <span className="gr_hint">支持方向键导航</span>
       </div>
       <div className="rk_list" ref={listRef}>
         {records.length ? records.map((e, i) => (

@@ -435,7 +435,7 @@ const REPLAY_MOUSE_SCRIPT = `
   var panel = document.createElement("div");
   panel.className = "replay_key_panel_flop";
   panel.setAttribute("data-testid", "replay-key-panel");
-  panel.innerHTML = '<div class="gr_title"><span>按键记录</span><span class="gr_hint">支持鼠标滚轮/方向键导航</span></div><div class="rk_list"></div>';
+  panel.innerHTML = '<div class="gr_title"><span>按键记录</span><span class="gr_hint">支持方向键导航</span></div><div class="rk_list"></div>';
   panel.hidden = !panelOpen;
   document.body.appendChild(panel);
   var list = panel.querySelector(".rk_list");
@@ -938,7 +938,8 @@ const MASK_EXIT_SCRIPT = `
     // 防重入标记仍在 → 永不重注。版本不符时重载 iframe 文档强制换新脚本
     // （dev/HMR 场景；生产新 bundle 只随页面刷新加载，不会走到这里）。
     // 12（2026-11-14）：MASK_EXIT 移动端禁暗区退出（误触关播放器）。
-    const HOST_SCRIPT_VER = 12;
+    // 13（2026-11-28）：REPLAY_MOUSE 面板提示文案改「支持方向键导航」（张老师定）。
+    const HOST_SCRIPT_VER = 13;
     const ensureInject = () => {
       const doc = frame.contentDocument;
       if (!doc || !doc.body || !doc.defaultView) return;
