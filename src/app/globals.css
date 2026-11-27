@@ -19673,6 +19673,11 @@ body #header .nav li a.nav_tour_upcoming:hover,
   font: 12px/18px Arial, Helvetica, sans-serif;
   letter-spacing: normal;
   white-space: nowrap;
+  /* 宽度按内容（2026-11-28 02:10 徽标挪主板块外）：非全屏由 JS 写 left 把徽标放到
+     .op_root 右缘之外——absolute 的收缩适配宽 = 包含块右缘 − left，出了包含块就
+     被算成负、只剩最小内容宽（竖条）；max-content 让它按内容自然伸展。全屏 fixed
+     态（right:10px 定位）同样按内容宽，与改前一致 */
+  width: max-content;
   z-index: 5;
 }
 #online_play .live_viewers_badge[hidden] {
