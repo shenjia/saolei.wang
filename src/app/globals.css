@@ -19637,6 +19637,8 @@ body #header .nav li a.nav_tour_upcoming:hover,
 #online_play .live_viewers_badge {
   position: absolute;
   right: 10px;
+  /* bottom 由 OnlinePlay syncLiveBadge 动态维护：底部有 BV 墙/比赛统计区时上移
+     （墙顶上方 12px），无墙时回落此默认 10px（JS removeProperty 即回到这里） */
   bottom: 10px;
   display: inline-flex;
   align-items: center;
