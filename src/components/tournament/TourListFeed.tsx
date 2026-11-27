@@ -81,7 +81,9 @@ export function TourListFeed({
   return (
     <>
       {rows.map((c) => (
-        <TourBlock key={c.id} c={c} now={now} loggedIn={loggedIn} myUid={myUid} />
+        // topN=30（2026-11-27 张老师定「列表页改 TOP30」）：图表散点前 30 名 +
+        // 右上角「只显示TOP30成绩」提示；详情页 TourBlock 不传=全量无提示
+        <TourBlock key={c.id} c={c} now={now} loggedIn={loggedIn} myUid={myUid} topN={30} />
       ))}
       {/* 通用翻页器（PageSlider）：单页也渲染（single 态全灰），换页走 URL、加载更多走 API */}
       <div className="list_footer">

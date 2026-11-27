@@ -17958,7 +17958,8 @@ body #header .nav li a.nav_tour_upcoming:hover,
   min-height: 60px; display: flex; align-items: stretch; justify-content: center; overflow: hidden;
 }
 .comp_chart:has(.comp_chart_body) { display: block; }
-.comp_chart_body { width: 100%; }
+/* relative：TOP30 截断提示（.comp_chart_topn）的绝对定位基准（2026-11-27） */
+.comp_chart_body { width: 100%; position: relative; }
 .comp_chart_body .rec_chart { cursor: default; }
 /* 无数据占位形态（2026-11-19 早张老师定：与有数据比赛同款 rec_card 卡片，
    左上角不放「最好成绩」标题行——只有居中占位文案，稍大 16px） */
@@ -17977,6 +17978,17 @@ body #header .nav li a.nav_tour_upcoming:hover,
 .comp_chart_body .rec_tip b.comp_tip_val .comp_tip_unit { color: #b1b1a4; font-weight: 400; }
 .comp_chart_empty { color: #75715e; font-size: 14px; padding: 8px; }
 .comp_chart_svg { display: block; }
+/* TOP30 截断提示（2026-11-27 张老师定）：列表页图表右上角深灰小字，
+   绝对定位于 .comp_chart_body（relative，见 17961 行）内右上角 */
+.comp_chart_topn {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #75715e;
+  pointer-events: none; /* 不挡图表 hover 竖条 */
+}
 
 /* 板块标题行（标题+右上角搜索框，2026-11-18 深夜定：录像区搜索同录像页页头形态）。
    20:01 张老师定：级别 tabs 紧靠标题（同首页 .news_head 形态）——flex-end 底线对齐

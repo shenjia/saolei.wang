@@ -53,6 +53,7 @@ export function TourBlock({
   loggedIn,
   detail,
   myUid,
+  topN,
 }: {
   c: TourRow;
   now: number;
@@ -64,6 +65,9 @@ export function TourBlock({
   detail?: boolean;
   /** 观看者 uid（2026-11-19 张老师定：参赛且在榜 → 图表绿点+垂线标记我的位置） */
   myUid?: number;
+  /** 图表散点截断数（2026-11-27 张老师定「列表页改 TOP30」）：列表页传 30——
+      右上角显示「只显示TOP30成绩，完整成绩请在详情页查看」深灰小字；详情页不传=全量无提示 */
+  topN?: number;
 }) {
   // 状态标签人数后缀（2026-11-24 张老师需求）：进行中/已结束显示完赛人数、
   // 未开始显示报名人数；人数为 0 时整段后缀不显示（含逗号）
@@ -119,6 +123,11 @@ export function TourBlock({
       <div className="comp_chart">
         {c.status !== "upcoming" && c.chartPoints.length > 0 && c.bestLine ? (
           <div className="rec_card comp_chart_body">
+            {/* TOP30 截断提示（2026-11-27 张老师定）：仅列表页（topN 传入时）显示，
+                右上角深灰小字；详情页全量不显示 */}
+            {!!topN && c.chartPoints.length >= topN && (
+              <span className="comp_chart_topn">只显示TOP{topN}成绩，完整成绩请在详情页查看</span>
+            )}
             <div className="rec_head">
               <span className="rec_name">最好成绩：</span>
               <b className="rec_val">{fmtTourScore(c.scoreMetric, c.bestLine.score)}</b>

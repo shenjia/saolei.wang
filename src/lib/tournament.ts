@@ -307,35 +307,18 @@ export async function getTournamentPage(page: number, uid?: number, pageSize?: n
   const finisherMap = await getTourFinishersBulk(pageRows.map((r) => Number(r.id)));
   pageRows.forEach((r) => { r.finishedCount = finisherMap.get(Number(r.id))?.length ?? 0; });
   const chartTargets = pageRows.filter((r) => r.status !== "upcoming");
-  const chartList = await Promise.all(chartTargets.map((r) => getTourRanking(Number(r.id), null)));
+  // 列表页图表改 TOP30（2026-11-27 张老师定「列表页改 TOP30」）：详情页保持全量口径，
+  // 列表页只展示前 30 名散点（TourBlock 右上角有截断提示文案）
+  const chartList = await Promise.all(chartTargets.map((r) => fetchTourListChartCached(Number(r.id))));
   const chartMap = new Map<string, { rank: number; score: number; name?: string; uid?: number; englishName?: string; sex?: number; title?: string; classic?: { name: string; color: string } | null }[]>();
   const bestMap = new Map<string, TourRow["bestLine"]>();
   chartTargets.forEach((r, i) => {
-    const list = chartList[i];
-    chartMap.set(
-      r.id,
-      list.map((x) => ({
-        rank: x.rank,
-        score: x.time / 1000,
-        name: x.name,
-        uid: x.uid,
-        englishName: x.englishName,
-        sex: x.sex,
-        title: x.title,
-        classic: x.classic,
-      })),
-    );
-    const first = list[0];
+    chartMap.set(r.id, chartList[i].points);
     bestMap.set(
       r.id,
-      first
+      chartList[i].best
         ? {
-            score: first.time,
-            name: first.name,
-            englishName: first.englishName,
-            sex: first.sex,
-            title: first.title,
-            uid: first.uid,
+            ...chartList[i].best!,
             at: 0, // 列表形态不查「创造于」精确时刻（多一次查询单场比赛），渲染端 at=0 时不显示时刻段
           }
         : null,
@@ -1358,6 +1341,58 @@ export interface TourRankRow {
    *  sum_topn 每级别一条 real+fill，target_diff 为 null） */
   calc: { lv: string; n: number; real: number; fill: number; floorScore: number }[] | null;
 }
+
+/** 列表页图表单场数据（2026-11-27 张老师定「列表页改 TOP30」）：散点取前 30 名 +
+ *  最好成绩行（=第一名，总分口径）。与详情页 getTournamentDetail 全量口径分开——
+ *  getTourRanking 的 limit 只裁最终名次行，四表全量扫描（金羊杯 21 届 1.1 万盘级
+ *  巨型 IN 回查，单条 SQL 295KB/返回 3 万行）发生在函数内部，靠 limit 治不了根；
+ *  真正的降载靠下方 unstable_cache：每场 60s 只付一次全量算分，翻页/加载更多命中缓存 */
+export interface TourListChartData {
+  /** 图表散点（rank 1..30，score 秒） */
+  points: TourRow["chartPoints"];
+  /** 最好成绩行（第一名；无成绩 null）——at 恒 0（列表形态不查「创造于」） */
+  best: TourRow["bestLine"];
+}
+
+export async function getTourListChart(compId: number): Promise<TourListChartData> {
+  const list = await getTourRanking(compId, 30);
+  const first = list[0];
+  return {
+    points: list.map((x) => ({
+      rank: x.rank,
+      score: x.time / 1000,
+      name: x.name,
+      uid: x.uid,
+      englishName: x.englishName,
+      sex: x.sex,
+      title: x.title,
+      classic: x.classic,
+    })),
+    best: first
+      ? {
+          score: first.time,
+          name: first.name,
+          englishName: first.englishName,
+          sex: first.sex,
+          title: first.title,
+          uid: first.uid,
+          at: 0, // 列表形态不查「创造于」精确时刻（多一次查询单场比赛），渲染端 at=0 时不显示时刻段
+        }
+      : null,
+  };
+}
+
+/** 60s 缓存包装（键=compId）：比赛页列表每行一张图表，翻页/加载更多/多人访问
+ *  命中同一键——金羊杯四场合计每次渲染 3-5 个巨型 IN 降至 60s 一次。
+ *  v2 键前缀：改口径（如 TOP30→TOP50）必须升版本换键 */
+const fetchTourListChartCached = (compId: number) => {
+  const cached = unstable_cache(
+    async (cid: number) => getTourListChart(cid),
+    ["tour-list-chart-v2", String(compId)],
+    { revalidate: 60 }
+  );
+  return cached(compId);
+};
 
 /** 排行榜（张老师 2026-11-18 定：按比赛设定计算成绩排序，不再按单盘最好成绩）——
  *  sum_topn：窗口内录像按 computePlayerScores 同口径算总分（不足 N 局补保底），
