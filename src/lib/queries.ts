@@ -328,19 +328,18 @@ function newsLevelFilter(level: string) {
   };
 }
 
-/** 级别筛选只在「成绩类动态」里匹配（2026-10-27）。
+/** 级别筛选只在「正式纪录动态」里匹配（2026-11-27 张老师定）。
  *  背景：录像评论动态（type=52）的 details.lv 记的是**被评论录像**的级别，级别筛选只按
  *  details_data 的 lv 串匹配、不限类型，于是用户主页「初级」tab 里冒出
  *  「评论了录像 岳慎哲 的 初级 1.74NF」（张老师 2026-10-27 报告）。
- *  级别 tab 的语义＝该用户在该级别的成绩动态（旧站 News_My_Beg/Int/Exp 也只列破纪录），
+ *  级别 tab 的语义＝该用户在该级别的正式成绩纪录（time/3bvs），
  *  评论一律不在其内（要看去「全部」或「论坛」）。地区/全国纪录同为成绩类，一并保留口径。
- *  2026-11-19 张老师定：BV 收集动态（57，details 自带 lv）纳入级别筛选——
- *  「高级」tab 应能看到该级别的 BV 时间纪录动态。 */
+ *  2026-11-27 张老师定：级别筛选只看正式纪录（time/3bvs），不看新BV收集和破单BV的PB动态——
+ *  BV 收集动态（57）撤出级别筛选（仍可在「全部」tab 查看）。 */
 const NEWS_LEVEL_TYPES: number[] = [
   NEWS_TYPE.PERSON_RECORD,
   NEWS_TYPE.AREA_RECORD,
   NEWS_TYPE.NATION_RECORD,
-  NEWS_TYPE.BV_RECORD,
 ];
 
 /**
