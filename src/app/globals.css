@@ -19482,18 +19482,30 @@ body #header .nav li a.vs_new_hint,
 }
 
 
-/* ---- 粉丝端「正在练习」通知气泡（2026-11-27 张老师需求）----
-   右下角 fixed 悬浮卡片：主体一行（头像/姓名/性别/军衔徽章+配色/「正在练习」
-   + 红点脉冲），下沿深灰小字「点击去旁观」；hover 悬停不打断 15s 自动淡出，
-   点击新标签打开旁观并永久不再弹该玩家。z-index 低于 toast(60)——提示优先 */
-.live_notify {
+/* ---- 粉丝端「正在练习」通知气泡（2026-11-27 张老师需求；23:48 多条堆叠）----
+   右下角 fixed 三格卡片堆：最多同时 3 条，新卡从底部进入、旧卡向上补位；
+   更多候选每 4s 轮换，顶部继续上移并渐隐。悬停任一条暂停整堆计时，
+   z-index 低于 toast(60)——全站操作提示优先。卡片 64px + 间距 10px，
+   与 LiveNotifyHost 的 NOTIFY_STEP=74 保持一致。 */
+.live_notify_stack {
   position: fixed;
   right: 20px;
   bottom: 20px;
   z-index: 55;
+  width: 0;
+  height: 212px; /* 3×64 + 2×10；底部锚定，卡片绝对定位到各槽 */
+  pointer-events: none;
+}
+.live_notify {
+  position: absolute;
+  right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100vw - 40px);
+  height: 64px;
   gap: 4px;
   padding: 12px 18px 9px;
   background: #272822;
@@ -19502,6 +19514,8 @@ body #header .nav li a.vs_new_hint,
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
   cursor: pointer;
   user-select: none;
+  pointer-events: auto;
+  transition: bottom 0.3s ease;
   animation: live_notify_in 0.25s ease-out;
   text-shadow: none;
 }
@@ -19509,14 +19523,22 @@ body #header .nav li a.vs_new_hint,
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: none; }
 }
-/* 渐隐退场（2026-11-27 14:46 张老师定）：消失时 0.25s 淡出再卸载——
-   组件 closing 态挂本类，动画 forwards 保持终态，超时后 React 卸载 */
+/* 点击/超时：原地渐隐；队列轮换：顶部卡片向上多走一格，同时渐隐。
+   退场期间不截获鼠标，避免挡住下面仍可点击的卡片。 */
 .live_notify.closing {
+  pointer-events: none;
   animation: live_notify_out 0.25s ease-in forwards;
+}
+.live_notify.closing.cycling {
+  animation: live_notify_cycle 0.3s ease-in forwards;
 }
 @keyframes live_notify_out {
   from { opacity: 1; }
   to { opacity: 0; transform: translateY(8px); }
+}
+@keyframes live_notify_cycle {
+  from { opacity: 1; }
+  to { opacity: 0; transform: translateY(-12px); }
 }
 .live_notify .live_notify_main {
   display: flex;

@@ -1,6 +1,6 @@
 "use client";
 
-// 粉丝端「正在练习」通知气泡（2026-11-27 张老师需求；13:50 重定去重口径）：
+// 粉丝端「正在练习」通知气泡（2026-11-27 张老师需求；23:48 改版多条堆叠）：
 // 关注的主播开「允许旁观」并玩完一盘（含踩雷局）后，在线粉丝页面右下角弹出
 // 悬浮小气泡「XXX正在练习」（姓名/性别/军衔正确渲染）；下沿深灰小字
 // 「点击去旁观」，点击在新标签页打开旁观界面。
@@ -11,11 +11,12 @@
 //   「本场已弹」标记）；
 // · 点击去旁观≠永久屏蔽（旧 localStorage 永久口径已废）——点过的这场上
 //   不再弹，下一场照常提醒；
-// · 多主播同播排队：一个显示完（淡出/点击）再弹下一个，逐个轮到。
+// · 多主播同播：最多同时显示 3 条，每条都可独立点击；更多候选排队，
+//   每 4 秒整体向上滚动一格，最上方条目继续上移并渐隐，新条目从底部进入。
 //
 // 轮询：60s /api/live/notify（登录粉丝视角）。观察流：每次轮询记录在线集合，
 // 离开的主播清「已弹」标记——再上线就是新一场。
-// 气泡形态：右下 fixed 卡片，15s 自动淡出（hover 暂停），点击新标签旁观。
+// 气泡形态：右下 fixed 卡片堆，15s 自动淡出；悬停任一条时整堆暂停计时。
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DefaultAvatar } from "@/components/DefaultAvatar";
@@ -48,8 +49,22 @@ interface NotifyStreamer {
   comp: boolean;
 }
 
+interface NotifyCard {
+  streamer: NotifyStreamer;
+  /** 退场卡片保留 250/300ms 做动画，不再响应鼠标 */
+  leaving: boolean;
+  /** 队列轮换：最上方卡片额外向上挪一格；普通点击/超时只原地淡出 */
+  cycle: boolean;
+  /** 0=最下方，2=三格堆叠的最上方；3 仅供轮换退场使用 */
+  slot: number;
+}
+
 const POLL_MS = 60_000;
-const SHOW_MS = 15_000; /* 气泡停留：15 秒后自动淡出（hover 悬停不打断） */
+const SHOW_MS = 15_000; /* 无后续排队时，每条停留 15 秒；悬停整堆暂停 */
+const ROTATE_MS = 4_000; /* 还有更多候选时，每 4 秒向上滚动一格 */
+const EXIT_MS = 300;
+const MAX_VISIBLE = 3;
+const NOTIFY_STEP = 74; /* 卡片 64px + 间距 10px，与 globals.css 保持一致 */
 
 /* 自己正在练习页对局中（2026-11-27 14:12 张老师定：游戏进行中不打扰）：
  * 在 /online（#online_play 存在）且未到结算态（gresult 未显示、gr_modal
@@ -64,84 +79,187 @@ function isSelfPlaying(): boolean {
   return !ended;
 }
 
+/* 活跃卡片按「 oldest 在上、最新在下」分配固定槽位。轮换退场卡不占槽，
+   因而旧顶部向第 4 格离场时，其余卡片与新卡片能同拍向上补位。 */
+function layoutCards(cards: NotifyCard[]): NotifyCard[] {
+  let slot = cards.filter((c) => !c.leaving).length - 1;
+  return cards.map((card) => {
+    if (card.leaving) return card;
+    const placed = { ...card, slot };
+    slot -= 1;
+    return placed;
+  });
+}
+
+interface NotifyCardViewProps {
+  card: NotifyCard;
+  paused: boolean;
+  onExpire: (uid: number) => void;
+  onOpen: (streamer: NotifyStreamer) => void;
+  onMute: (streamer: NotifyStreamer) => void;
+  onHover: (uid: number | null) => void;
+}
+
+function LiveNotifyCard({ card, paused, onExpire, onOpen, onMute, onHover }: NotifyCardViewProps) {
+  const s = card.streamer;
+
+  /* 每张卡独立计时；slot 变化只驱动位移，不重置 15 秒停留时间。
+     悬停整堆暂停，离开后重计 15 秒（沿用旧单条气泡口径）。 */
+  useEffect(() => {
+    if (card.leaving || paused) return;
+    const timer = window.setTimeout(() => onExpire(s.uid), SHOW_MS);
+    return () => window.clearTimeout(timer);
+  }, [card.leaving, paused, s.uid, onExpire]);
+
+  return (
+    <div
+      className={`live_notify${card.leaving ? " closing" : ""}${card.cycle ? " cycling" : ""}`}
+      style={{ bottom: card.slot * NOTIFY_STEP }}
+      role="status"
+      onMouseEnter={() => onHover(s.uid)}
+      onMouseLeave={() => onHover(null)}
+      onClick={() => onOpen(s)}
+    >
+      <div className="live_notify_main">
+        {s.isDefault
+          ? <DefaultAvatar sex={s.sex} size="small" className="live_notify_avatar" alt={s.name} />
+          : /* eslint-disable-next-line @next/next/no-img-element */
+            <img className="live_notify_avatar" src={s.avatar} alt={s.name} />}
+        <span className="live_notify_name">{s.name}</span>
+        <span className={`gender ${s.sex ? "male" : "female"}`} aria-label={s.sex ? "男" : "女"} />
+        <span className="live_notify_rank">
+          <RankBadge title={s.title} />
+          <span className="live_notify_rank_name" style={{ color: s.titleColor }}>{s.title}</span>
+        </span>
+        <span className="live_notify_playing">{s.comp ? "正在比赛" : "正在练习"}</span>
+        <span className="live_notify_dot" aria-hidden="true" />
+      </div>
+      <p className="live_notify_hint">
+        <span className="live_notify_go">
+          {s.viewers > 0 ? `${s.viewers}人正在旁观` : "点击去旁观"}
+        </span>
+        <a
+          href="#"
+          className="live_notify_mute"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onMute(s);
+          }}
+        >今日不再提醒</a>
+      </p>
+    </div>
+  );
+}
+
 export function LiveNotifyHost() {
-  const [current, setCurrent] = useState<NotifyStreamer | null>(null);
-  const [hovering, setHovering] = useState(false);
-  /* 队列长度镜像（state 化——入队时驱动消费 effect；ref 队列本体） */
+  const [cards, setCards] = useState<NotifyCard[]>([]);
+  const cardsRef = useRef<NotifyCard[]>([]);
   const [queueLen, setQueueLen] = useState(0);
-  /* 渐隐退场中（2026-11-27 14:46 张老师定）：消失先淡出 250ms 再卸载 */
-  const [closing, setClosing] = useState(false);
-  const hideTimerRef = useRef<number | null>(null);
-  const closeTimerRef = useRef<number | null>(null);
+  const queueRef = useRef<NotifyStreamer[]>([]);
+  const [hoveringUid, setHoveringUid] = useState<number | null>(null);
+  const hoveringUidRef = useRef<number | null>(null);
+  const nextRotateAtRef = useRef(0);
   /* 局中挂起时的观察器句柄（结算出现即清） */
   const playingWatchRef = useRef<number | null>(null);
+  const closeTimersRef = useRef<Map<number, number>>(new Map());
   /* 本页面周期内「这场直播已弹过」的主播集合；主播离线即摘除（再上线=新一场） */
   const notifiedRef = useRef<Set<number>>(new Set());
-  /* 弹出中队列（张老师 13:50 定：一个显示完再弹下一个） */
-  const queueRef = useRef<NotifyStreamer[]>([]);
 
-  /* 统一退场（渐隐 250ms 后卸载）：15s 到点 / 点击去旁观 / 今日不再提醒
-     三路共用；期间 hover 不复活（closing 态到点即走） */
-  const dismiss = useCallback(() => {
-    if (closeTimerRef.current !== null) return; /* 已在退场 */
-    setClosing(true);
-    closeTimerRef.current = window.setTimeout(() => {
-      closeTimerRef.current = null;
-      setClosing(false);
-      setCurrent(null);
-    }, 250);
+  const commitCards = useCallback((next: NotifyCard[]) => {
+    cardsRef.current = next;
+    setCards(next);
   }, []);
 
-  const scheduleHide = useCallback(() => {
-    if (hideTimerRef.current !== null) clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = window.setTimeout(() => dismiss(), SHOW_MS);
+  /* 有空位就立即补入，最多三条。普通点击退场的卡片仍占原槽直到动画结束，
+     避免补位卡与渐隐卡重叠；轮换退场卡例外，立刻让出新底部槽位。 */
+  const pump = useCallback(() => {
+    if (isSelfPlaying()) return;
+    const occupied = cardsRef.current.filter((c) => !c.leaving || !c.cycle).length;
+    const capacity = MAX_VISIBLE - occupied;
+    if (capacity <= 0 || !queueRef.current.length) return;
+    const additions = queueRef.current.splice(0, capacity).map((streamer) => ({
+      streamer,
+      leaving: false,
+      cycle: false,
+      slot: 0,
+    }));
+    setQueueLen(queueRef.current.length);
+    commitCards(layoutCards([...cardsRef.current, ...additions]));
+  }, [commitCards]);
+
+  /* 统一退场：点击/免打扰/15s 到点原地渐隐；队列轮换则顶部继续上移。
+     每卡独立关闭定时器，多条同时操作互不阻塞。 */
+  const dismiss = useCallback((uid: number, cycle = false) => {
+    const target = cardsRef.current.find((c) => c.streamer.uid === uid && !c.leaving);
+    if (!target) return;
+    if (hoveringUidRef.current === uid) {
+      hoveringUidRef.current = null;
+      setHoveringUid(null);
+    }
+    let next = cardsRef.current.map((card) => card.streamer.uid === uid
+      ? { ...card, leaving: true, cycle, slot: cycle ? MAX_VISIBLE : card.slot }
+      : card);
+    if (cycle) next = layoutCards(next);
+    commitCards(next);
+    if (cycle) pump(); /* 顶部离场的同一拍，新卡从底部补入 */
+
+    const oldTimer = closeTimersRef.current.get(uid);
+    if (oldTimer !== undefined) window.clearTimeout(oldTimer);
+    const timer = window.setTimeout(() => {
+      closeTimersRef.current.delete(uid);
+      commitCards(layoutCards(cardsRef.current.filter((c) => c.streamer.uid !== uid)));
+      pump();
+    }, EXIT_MS);
+    closeTimersRef.current.set(uid, timer);
+  }, [commitCards, pump]);
+
+  /* 队列轮换：仅在三格占满且确有后续时运行。独立调度器直接读 ref，
+     不受父级重渲染影响；悬停任意卡片则清零倒计时，离开后重新等待 4 秒。 */
+  const activeCards = cards.filter((c) => !c.leaving);
+  const activeKey = activeCards.map((c) => c.streamer.uid).join(",");
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const active = cardsRef.current.filter((c) => !c.leaving);
+      if (!queueRef.current.length || hoveringUidRef.current !== null || active.length < MAX_VISIBLE) {
+        nextRotateAtRef.current = 0;
+        return;
+      }
+      const now = Date.now();
+      if (!nextRotateAtRef.current) {
+        nextRotateAtRef.current = now + ROTATE_MS;
+        return;
+      }
+      if (now < nextRotateAtRef.current) return;
+      nextRotateAtRef.current = 0;
+      dismiss(active[0].streamer.uid, true);
+    }, 250);
+    return () => window.clearInterval(timer);
   }, [dismiss]);
 
-  /* 队列驱动：气泡消失（淡出/点击）后立即取下一个候选。
-     免打扰（2026-11-27 14:12 张老师定）：自己在练习局中（isSelfPlaying）
-     时挂起不弹——结算态出现后 1s 拍消费（局中观察器 pollWatching） */
+  /* 自己局中只入队不显示；结算出现后 1s 观察拍补位。 */
   useEffect(() => {
-    if (current) return;
-    if (!queueRef.current.length) return;
-    if (isSelfPlaying()) {
-      /* 局中挂起：起 1s 观察器等结算（游戏结束）再消费 */
-      if (playingWatchRef.current === null) {
-        playingWatchRef.current = window.setInterval(() => {
-          if (isSelfPlaying()) return;
-          if (playingWatchRef.current !== null) {
-            clearInterval(playingWatchRef.current);
-            playingWatchRef.current = null;
-          }
-          const next = queueRef.current.shift();
-          if (next) {
-            setQueueLen(queueRef.current.length);
-            setCurrent(next);
-          }
-        }, 1000);
+    if (queueLen === 0 || activeCards.length >= MAX_VISIBLE || !isSelfPlaying()) return;
+    if (playingWatchRef.current !== null) return;
+    playingWatchRef.current = window.setInterval(() => {
+      if (isSelfPlaying()) return;
+      if (playingWatchRef.current !== null) {
+        window.clearInterval(playingWatchRef.current);
+        playingWatchRef.current = null;
       }
-      return;
-    }
-    const next = queueRef.current.shift()!;
-    setQueueLen(queueRef.current.length);
-    setCurrent(next);
-  }, [current, queueLen]);
+      pump();
+    }, 1000);
+  }, [activeCards.length, queueLen, pump]);
 
-  /* 轮询：观察在线集合 → 场次变化检测 → 入队（入队即更新 queueLen 驱动消费） */
+  /* 轮询：观察在线集合 → 场次变化检测 → 入队并立即填充空位。 */
   useEffect(() => {
     let alive = true;
-    /* 「今日不再提醒」（2026-11-27 14:16 张老师定）：该玩家 24h 内不再弹 */
     const muted = (uid: number): boolean => {
       try {
         const until = Number(localStorage.getItem(`live_notify_muted_until_${uid}`) ?? "0");
         return until > Date.now();
       } catch { return false; }
     };
-    /* 正在旁观的主播不再弹（2026-11-27 14:44 张老师报：进入旁观页后还弹
-       该玩家的提醒）——气泡点击新标签打开 /live/<uid>，旁观页自己是新页面
-       周期（notifiedRef 为空），首次轮询就会再弹同一主播。口径：当前页
-       pathname 是 /live/<uid> 时，该主播的通知一律不入队（其余主播照常，
-       多主播排队不受影响）；每次轮询现算 pathname——SPA 客户端导航进入
-       旁观页同样生效 */
     const watchingUidNow = (): number => {
       const m = location.pathname.match(/^\/live\/(\d+)/);
       return m ? Number(m[1]) : 0;
@@ -155,111 +273,78 @@ export function LiveNotifyHost() {
         if (!alive || !j.ok) return;
         const online = (j.streamers ?? []).filter((s) => !muted(s.uid) && s.uid !== watchingUid);
         const onlineSet = new Set(online.map((s) => s.uid));
-        /* 离线的主播：摘「本场已弹」标记——再上线就是新一场（会再弹） */
         for (const uid of Array.from(notifiedRef.current)) {
           if (!onlineSet.has(uid)) notifiedRef.current.delete(uid);
         }
-        /* 新开播且本场未弹过的主播入队（同一主播队内/正在展示不重复） */
         let queued = false;
         for (const s of online) {
           if (notifiedRef.current.has(s.uid)) continue;
           if (queueRef.current.some((q) => q.uid === s.uid)) continue;
-          if (currentUidRef.current === s.uid) continue;
-          notifiedRef.current.add(s.uid); /* 入队即计「已弹」（防重复入队） */
+          if (cardsRef.current.some((c) => c.streamer.uid === s.uid)) continue;
+          notifiedRef.current.add(s.uid);
           queueRef.current.push(s);
           queued = true;
         }
-        if (queued) setQueueLen(queueRef.current.length); /* 驱动消费 effect */
+        if (queued) {
+          setQueueLen(queueRef.current.length);
+          pump();
+        }
       } catch { /* 静默：通知是增强链路 */ }
     };
     void poll();
     const timer = window.setInterval(poll, POLL_MS);
     return () => { alive = false; window.clearInterval(timer); };
-  }, []);
-  const currentUidRef = useRef<number | null>(null);
-  useEffect(() => { currentUidRef.current = current?.uid ?? null; }, [current]);
+  }, [pump]);
 
-  /* 提示音 + 预取：挂载即注册预取清单（手势解锁后自动 fetch+decode 就绪）；
-     气泡显示（current 非空）时播放——局中挂起/直接消费两路统一在这触发 */
+  /* 提示音预取；同一批多张只响一次，后续从队列补入的新主播再响。 */
+  useEffect(() => { sfxPrefetch([NOTIFY_SND]); }, []);
+  const soundedRef = useRef<Set<number>>(new Set());
   useEffect(() => {
-    sfxPrefetch([NOTIFY_SND]);
-  }, []);
-  useEffect(() => {
-    if (current) sfxPlay(NOTIFY_SND);
-  }, [current]);
+    const current = new Set(activeKey ? activeKey.split(",").map(Number) : []);
+    if (Array.from(current).some((uid) => !soundedRef.current.has(uid))) sfxPlay(NOTIFY_SND);
+    soundedRef.current = current;
+  }, [activeKey]);
 
-  /* 停留计时：出现后 15s 淡出；hover 悬停暂停（离开重计时） */
-  useEffect(() => {
-    if (!current) return;
-    if (!hovering) scheduleHide();
-    else if (hideTimerRef.current !== null) {
-      clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
-    }
-    return () => {
-      if (hideTimerRef.current !== null) {
-        clearTimeout(hideTimerRef.current);
-        hideTimerRef.current = null;
-      }
-    };
-  }, [current, hovering, scheduleHide]);
-
-  /* 点击：新标签打开旁观 → 气泡渐隐收起（本场上不再弹；下一场照常提醒） */
+  /* 点击：新标签打开旁观；今日不再提醒：该主播 24h 内不再弹。 */
   const openWatch = useCallback((s: NotifyStreamer) => {
     window.open(`/live/${s.uid}`, "_blank", "noopener");
-    dismiss();
+    dismiss(s.uid);
   }, [dismiss]);
+  const mute = useCallback((s: NotifyStreamer) => {
+    try {
+      localStorage.setItem(`live_notify_muted_until_${s.uid}`, String(Date.now() + 24 * 3600 * 1000));
+    } catch { /* 隐私模式 */ }
+    dismiss(s.uid);
+  }, [dismiss]);
+  const changeHover = useCallback((uid: number | null) => {
+    hoveringUidRef.current = uid;
+    setHoveringUid(uid);
+  }, []);
 
-  if (!current) return null;
-  const s = current;
+  useEffect(() => () => {
+    if (playingWatchRef.current !== null) window.clearInterval(playingWatchRef.current);
+    for (const timer of closeTimersRef.current.values()) window.clearTimeout(timer);
+  }, []);
+
+  if (!cards.length) return null;
   return (
     <div
-      className={`live_notify${closing ? " closing" : ""}`}
+      className="live_notify_stack"
       ref={(el) => { if (el) liveNotifyNodes.add(el); }}
-      role="status"
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      onClick={() => openWatch(s)}
+      aria-live="polite"
+      aria-relevant="additions"
     >
-      <div className="live_notify_main">
-        {s.isDefault
-          ? <DefaultAvatar sex={s.sex} size="small" className="live_notify_avatar" alt={s.name} />
-          : /* eslint-disable-next-line @next/next/no-img-element */
-            <img className="live_notify_avatar" src={s.avatar} alt={s.name} />}
-        <span className="live_notify_name">{s.name}</span>
-        <span className={`gender ${s.sex ? "male" : "female"}`} aria-label={s.sex ? "男" : "女"} />
-        <span className="live_notify_rank">
-          <RankBadge title={s.title} />
-          <span className="live_notify_rank_name" style={{ color: s.titleColor }}>{s.title}</span>
-        </span>
-        {/* 比赛模式（2026-11-27 20:30 张老师定）：「正在练习」换「正在比赛」 */}
-        <span className="live_notify_playing">{s.comp ? "正在比赛" : "正在练习"}</span>
-        <span className="live_notify_dot" aria-hidden="true" />
-      </div>
-      <p className="live_notify_hint">
-        {/* 旁观数（2026-11-27 14:46 张老师定）：>0 显示「x人正在旁观」——
-            一段完整文本不分割、数字同深灰；否则「点击去旁观」；
-            hover 卡片主体时变绿（.live_notify:hover 联动，14:33 张老师定）；
-            21:28 定：hover「今日不再提醒」时本段压回深灰（:has 联动，
-            不应两个同时绿）——故包 span 供 CSS 单独选中 */}
-        <span className="live_notify_go">
-          {s.viewers > 0 ? `${s.viewers}人正在旁观` : "点击去旁观"}
-        </span>
-        {/* 「今日不再提醒」（同 14:33 张老师定）：与左侧文案同行居右，
-            hover 链接变玫瑰红（.live_notify_mute:hover） */}
-        <a
-          href="#"
-          className="live_notify_mute"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            try {
-              localStorage.setItem(`live_notify_muted_until_${s.uid}`, String(Date.now() + 24 * 3600 * 1000));
-            } catch { /* 隐私模式 */ }
-            dismiss();
-          }}
-        >今日不再提醒</a>
-      </p>
+      {cards.map((card) => (
+        <LiveNotifyCard
+          key={card.streamer.uid}
+          card={card}
+          paused={hoveringUid !== null}
+          onExpire={dismiss}
+          onOpen={openWatch}
+          onMute={mute}
+          onHover={changeHover}
+        />
+      ))}
     </div>
   );
 }
