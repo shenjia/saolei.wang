@@ -10013,12 +10013,78 @@ button.msg_cancel:hover {
   border-radius: 8px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
   padding: 12px 16px 14px;
-  z-index: 30;
+  /* 分类后浮窗变短，底部会落到开局 Tips 区域；须压过 #op_tips(40)，
+     但保持低于局中 toast(60) 与结算遮罩(150)，避免提示文字盖住 3BV 滑杆。 */
+  z-index: 50;
   text-align: left;
   text-shadow: none;
 }
 #online_play .gsettings.open {
   display: block;
+}
+/* 设置分类筛选（2026-11-27 张老师定）：体验 / 操作双 Tab，默认体验。
+   二轮定为全站通用下划线筛选器：当前项黄字加粗 + 黄色下划线，hover 绿字；
+   控件仍在原浮窗内，只按 tabpanel 显隐，排行禁用样式继续挂各行自身。 */
+#online_play .gsettings .gs_tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  margin: 0 0 8px;
+  border-bottom: 1px solid #656355;
+}
+#online_play .gsettings .gs_tab {
+  appearance: none;
+  position: relative;
+  display: block;
+  min-width: 0;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  text-shadow: none;
+  color: #939387;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 21px;
+  text-align: center;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+#online_play .gsettings .gs_tab::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: transparent;
+  transition: background 0.15s;
+}
+#online_play .gsettings .gs_tab:hover {
+  color: #a6e22e;
+}
+#online_play .gsettings .gs_tab:hover::after {
+  background: #656355;
+}
+#online_play .gsettings .gs_tab.current,
+#online_play .gsettings .gs_tab.current:hover {
+  background: transparent;
+  color: #fdc61a;
+  font-weight: 700;
+  cursor: default;
+}
+#online_play .gsettings .gs_tab.current::after,
+#online_play .gsettings .gs_tab.current:hover::after {
+  background: #fdc61d;
+}
+#online_play .gsettings .gs_tab:focus-visible {
+  outline: 2px solid #fdc61d;
+  outline-offset: 1px;
+}
+#online_play .gsettings .gs_panel[hidden] {
+  display: none;
 }
 #online_play .gsettings .gs_row {
   position: relative;
