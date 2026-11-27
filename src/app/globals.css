@@ -19320,13 +19320,15 @@ body #header .nav li a.vs_new_hint,
 .live_watch .live_host_playing .live_comp_link:hover {
   color: #fdc61a;
 }
-/* 直播红点：紧靠「正在练习」右侧，动态脉冲；未开播灰态静止 */
+/* 旁观绿点（2026-11-28 张老师定「红点换绿点」；2026-11-27 原为直播红点 #e33——
+   去直播化：红点是最强直播符号，改绿点＝「在线」语义）：紧靠「正在练习」右侧，
+   动态脉冲；未开播灰态静止 */
 .live_watch .live_host .live_dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #e33;
-  box-shadow: 0 0 0 3px rgba(221, 51, 51, 0.18);
+  background: #3aa65a;
+  box-shadow: 0 0 0 3px rgba(58, 166, 90, 0.22);
   animation: live_pulse 1.4s ease-in-out infinite;
   flex: 0 0 auto;
   margin-left: 2px;
@@ -19444,7 +19446,7 @@ body #header .nav li a.vs_new_hint,
   gap: 5px;
   padding: 2px 8px;
   border-radius: 3px;
-  background: #e33;
+  background: #3aa65a;
   color: #fff;
   font-size: 12px;
   line-height: 16px;
@@ -19452,7 +19454,7 @@ body #header .nav li a.vs_new_hint,
   text-decoration: none;
 }
 #user_view .info .user_live_badge:hover {
-  background: #c22;
+  background: #2e8a4a;
   color: #fff;
   text-decoration: none;
 }
@@ -19470,7 +19472,8 @@ body #header .nav li a.vs_new_hint,
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #fff;
+  /* 徽标底改绿后，点用更亮的浅绿——白点在绿底上对比不足（2026-11-28） */
+  background: #b9f0c8;
   animation: live_pulse 1.4s ease-in-out infinite;
 }
 @keyframes live_pulse {
@@ -19558,8 +19561,8 @@ body #header .nav li a.vs_new_hint,
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #e33;
-  box-shadow: 0 0 0 3px rgba(221, 51, 51, 0.18);
+  background: #3aa65a;
+  box-shadow: 0 0 0 3px rgba(58, 166, 90, 0.22);
   animation: live_pulse 1.4s ease-in-out infinite;
   flex: 0 0 auto;
   margin-left: 2px;
@@ -19611,9 +19614,11 @@ body #header .nav li a.vs_new_hint,
   border-color: #939387;
 }
 
-/* 「隐身模式」行（2026-11-27 22:14 张老师定）：替代「允许旁观」——非赞助用户
-   （player.sponsor=false，SSR 按 donate 表赞助金额>0 判定）整行暗灰 + 开关
-   禁用（disabled 由组件 effect 下发）；tip 括号金字＝#fdc61d（站内金） */
+/* 「允许旁观」行（2026-11-27 13:50 最初设计；2026-11-28 02:37 张老师定改回）。2026-11-28
+   合规改造：对所有用户开放（原「限赞助用户」闸撤销——功能与赞助挂钩会被认定为
+   经营活动）；gs_dim 整行暗灰 + 开关禁用改由**年龄闸**驱动（player.under16，SSR 下发）
+   ——已填生日且未满 16 周岁强制关闭，hover 文案说明法律依据。
+   tip_gold＝#fdc61d（站内金，其他行仍在用） */
 #online_play .gsettings .gs_row.gs_dim .gs_name {
   color: #636359;
 }
@@ -19623,21 +19628,18 @@ body #header .nav li a.vs_new_hint,
 #online_play .gsettings .gs_row.gs_dim .tip {
   color: #636359;
 }
-#online_play .gsettings .gs_row.gs_dim .tip .tip_gold {
-  color: #8a7a33;
-}
 #online_play .gsettings .tip .tip_gold {
   color: #fdc61d;
 }
 /* 「x人正在旁观」悬浮徽标（2026-11-27 20:37 张老师定，替代原「自定义」tab 占位
    方案——比赛模式隐藏自定义 tab 时看不到旁观数，且不该抢常用入口的文案）：
-   主板块（#game_area）右下角悬浮，1px 深灰圆角矩形包裹 + 红点 + 「x人正在
-   旁观」。全屏三形态（原生 requestFullscreen / 网页 op-webfs / 伪全屏
+   主板块（#game_area）右下角悬浮，1px 深灰圆角矩形包裹 + 绿点 + 「x人正在
+   旁观」（2026-11-28 红点换绿点）。全屏三形态（原生 requestFullscreen / 网页 op-webfs / 伪全屏
    op-fakefs）宿主都铺满视口 → fixed 贴屏幕右下角（fixed 在 fullscreen 子树
    内仍相对视口）。节点由心跳响应命令式渲染（OnlinePlay paintLiveViewersBadge），
    G12 已 registerOwn 入册（反作弊 #game_area 直子观察器放行，bvwall 同口径）。
    ⚠️ 显式 display 会压过 UA 的 [hidden]{display:none}（2026-11-13 级别 tab
-   同款坑实证）——必须补 [hidden] 规则，否则空徽标+红点常驻 */
+   同款坑实证）——必须补 [hidden] 规则，否则空徽标+绿点常驻 */
 #online_play .live_viewers_badge {
   position: absolute;
   right: 10px;
@@ -19670,8 +19672,8 @@ body #header .nav li a.vs_new_hint,
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #e33;
-  box-shadow: 0 0 0 2px rgba(221, 51, 51, 0.2);
+  background: #3aa65a;
+  box-shadow: 0 0 0 2px rgba(58, 166, 90, 0.22);
   animation: live_pulse 1.4s ease-in-out infinite;
 }
 /* hover 旁观者名单（2026-11-28 张老师定）：替代原设置提醒，朝上方弹出；
@@ -19767,6 +19769,22 @@ body #header .nav li a.vs_new_hint,
 }
 #online_play .live_viewers_card .more_loader {
   padding: 5px 0 1px;
+}
+/* 名单底部提示（2026-11-28 02:47 张老师定）：横分割线 + 深灰小字「可以在设置中
+   关闭旁观功能」。分割线通栏（负 margin 抵消卡片左右 10px 内边距），上下各留 6px；
+   字色 #636359＝站内深灰（与设置行暗灰名同色），比旁观时长 #939387 再暗一档，
+   作脚注不抢名单主体。
+   ⚠️ 字号必须显式写：卡片上的 font:12px 简写传不到子元素（.op_root 后代有更高
+   优先级的统一字体规则把继承链切断——名单行本身渲染为 14px/微软雅黑，实测）。
+   13px＝比名单行小一档，与旁观页「x人正在旁观」徽标同字号 */
+#online_play .live_viewers_foot {
+  margin: 6px -10px 0;
+  padding: 6px 10px 2px;
+  border-top: 1px solid #656355;
+  color: #636359;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
 }
 /* 观看页徽标（.live_watchers_badge，LiveWatch JSX）：观众没有主播的旁观
    开关——不出 hover 提醒气泡、不挡其下元素点击。
