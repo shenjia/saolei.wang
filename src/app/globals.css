@@ -9892,7 +9892,8 @@ button.msg_cancel:hover {
 }
 #online_play .gicon.gmode_combo .tip em,
 #online_play .gicon.gmode_ng .tip em,
-#online_play .gicon.gmode_sq .tip em {
+#online_play .gicon.gmode_sq .tip em,
+#online_play .gicon.gmode_spec .tip em {
   color: #a6e22e;
 }
 /* 窄屏（≤880，与站内移动端断点一致）兜底：按钮贴近视口右缘，居中弹会被裁出屏
@@ -12754,6 +12755,25 @@ html.op-fakefs #header {
 #online_play .ranking_tabs span.rank_hidden,
 #online_play .gicon.rank_hidden {
   display: none !important;
+}
+/* 「允许旁观」眼睛快捷钮（2026-11-28 张老师定，自设置浮窗移出）：只在排行模式出现
+   ——rank_only_on 由 syncModeButtons 随排行态挂/摘。.gicon 的显式 display 会压过 UA 的
+   [hidden]，故隐藏态必须由本规则兜底（JSX 上的 hidden 只是 SSR 初态，水合后由类接管）。
+   图标渲染 20×20（实心杏仁眼，与无猜伞钮同尺寸；17px 下瞳孔镂空偏小） */
+#online_play .gicon.gmode_spec {
+  display: none !important;
+}
+#online_play .gicon.gmode_spec.rank_only_on {
+  display: inline-flex !important;
+}
+#online_play .gicon.gmode_spec svg {
+  width: 20px;
+  height: 20px;
+}
+/* 激活＝允许旁观：站内绿（与速旗/连击/无猜同系 #a6e22e） */
+#online_play .gicon.gmode_spec.active {
+  color: #a6e22e;
+  border-color: #a6e22e;
 }
 /* 倒计时行：.win_countdown（14px bold）+ 本页 22px 行高对齐成绩行；
    颜色内联注入（绿/黄/玫瑰红色阶），此处只管布局 */
