@@ -11,6 +11,7 @@ import type { Metadata } from "next";
 import { getSession } from "@/lib/auth";
 import { UserPanel } from "@/components/UserCard";
 import { TourListFeed } from "@/components/tournament/TourListFeed";
+import { CompStatRow } from "@/components/tournament/CompStatRow";
 import {
   getTourGlobalStats,
   getTourMyStats,
@@ -77,59 +78,40 @@ export default async function CompetitionsPage({
           {session && mstats && (
             <div className="box comp_stats">
               <h2>参赛记录</h2>
-              <div className="comp_stat_row">
-                <span>参赛次数</span>
-                <b>{mstats.joined}</b>
-              </div>
-              <div className="comp_stat_row">
-                <span>最高排名</span>
-                <b>{mstats.bestRank === null ? "—" : `第 ${mstats.bestRank} 名`}</b>
-              </div>
-              <div className="comp_stat_row">
-                <span>累计奖金</span>
-                <b className="gold">{mstats.prize > 0 ? fmtPrize(mstats.prize) : "—"}</b>
-              </div>
+              <table className="table full comp_stat_table" cellPadding={0} cellSpacing={0}>
+                <tbody>
+                  <CompStatRow label="参赛次数" num={<>{mstats.joined}</>} />
+                  {/* 2026-11-28 张老师定：最高排名直接显示金色数字（原「第 N 名」） */}
+                  <CompStatRow
+                    label="最高排名"
+                    num={mstats.bestRank === null ? <>—</> : <span className="gold">{mstats.bestRank}</span>}
+                  />
+                  <CompStatRow
+                    label="累计奖金"
+                    num={<span className="gold">{mstats.prize > 0 ? fmtPrize(mstats.prize) : "—"}</span>}
+                  />
+                </tbody>
+              </table>
             </div>
           )}
 
           {/* 全网统计（全站口径，未登录也显示）。
               2026-11-22 张老师定：今日有更新加绿色括号增量（形态与首页数据统计
               一致——delta>0 才显示，全站今日增量统一绿色 .stat_today）。
+              2026-11-28 张老师定：增量独立一列（CompStatRow 三列表格，版式同首页
+              SiteStats）——原数值与括号挤在同一格，各行数值右缘随增量有无而漂移。
               口径：动态事件表当日写入量——比赛个数=type1（发起）、
               参赛人数=type2 去重人、录像数量=type4 行数 */}
           <div className="box comp_stats">
             <h2>数据统计</h2>
-            <div className="comp_stat_row">
-              <span>比赛个数</span>
-              <b>
-                {gstats.tournaments}
-                {gstats.tournamentsToday > 0 && (
-                  <span className="stat_today">（+{gstats.tournamentsToday}）</span>
-                )}
-              </b>
-            </div>
-            <div className="comp_stat_row">
-              <span>参赛人数</span>
-              <b>
-                {gstats.participants}
-                {gstats.participantsToday > 0 && (
-                  <span className="stat_today">（+{gstats.participantsToday}）</span>
-                )}
-              </b>
-            </div>
-            <div className="comp_stat_row">
-              <span>录像数量</span>
-              <b>
-                {gstats.videos}
-                {gstats.videosToday > 0 && (
-                  <span className="stat_today">（+{gstats.videosToday}）</span>
-                )}
-              </b>
-            </div>
-            <div className="comp_stat_row">
-              <span>累计奖金</span>
-              <b className="gold">{fmtPrize(gstats.prizeTotal)}</b>
-            </div>
+            <table className="table full comp_stat_table" cellPadding={0} cellSpacing={0}>
+              <tbody>
+                <CompStatRow label="比赛个数" num={<>{gstats.tournaments}</>} today={gstats.tournamentsToday} />
+                <CompStatRow label="参赛人数" num={<>{gstats.participants}</>} today={gstats.participantsToday} />
+                <CompStatRow label="录像数量" num={<>{gstats.videos}</>} today={gstats.videosToday} />
+                <CompStatRow label="累计奖金" num={<span className="gold">{fmtPrize(gstats.prizeTotal)}</span>} />
+              </tbody>
+            </table>
           </div>
         </li>
       </ul>
