@@ -331,6 +331,11 @@ model Video {
   // (competition_id, create_time) 2026-11-13：比赛详情页「录像」板块按比赛取行
   // （正序时间序扫描）+ 后台按比赛筛选
   @@index([tournamentId, createTime])
+  // (competition_id, user, create_time) 2026-11-28：比赛内按玩家取录像——详情页最好成绩行
+  // 「创造于」（冠军最早一盘 ORDER BY create_time LIMIT 1，原计划误选 create_time 索引、
+  // 冠军近传时要扫过整场，生产实测 1.6s）、窗口赛个人窗录像、我的成绩/完赛判据
+  // 四处同一访问模式；第三列免排序。窗口赛带时间范围的查询优化器仍选上一索引，无退化。
+  @@index([tournamentId, user, createTime])
   // (review_user, status) 2026-10-22 迁移收尾索引排查：团队页 getTeam 逐管理员 count
   // （WHERE review_user=N AND status=20）原走 (status,…) 索引扫 15 万条目，实测 1.4s/人
   @@index([reviewUser, status])
