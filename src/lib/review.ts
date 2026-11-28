@@ -23,6 +23,7 @@ import {
 } from "./config";
 import { videoScores } from "./queries";
 import { refreshHomeNewsCache } from "./homenews-refresh";
+import { bumpTourRankRev } from "./tournament";
 import { publishNews } from "./news";
 import { sendSystemMessage } from "./message";
 import { refreshUserStnb, refreshUserStnbNf } from "./userstnb";
@@ -483,7 +484,7 @@ export async function reviewVideo(
 
   // 屏蔽通知要在事务外发（见下方），先把录像关键信息带出来
   // （对象包装避免 TS 闭包赋值收窄为 never）
-  const rvOut: { v: { id: number; user: number; level: string; realTime: number } | null } = { v: null };
+  const rvOut: { v: { id: number; user: number; level: string; realTime: number; tournamentId: number | null } | null } = { v: null };
 
   await prisma.$transaction(async (tx) => {
     const now = BigInt(Math.floor(Date.now() / 1000));
@@ -511,7 +512,7 @@ export async function reviewVideo(
     const rv = await loadReviewVideo(tx, videoId);
     if (!rv) throw new Error("录像数据不完整");
     rv.reviewTime = Number(now);
-    rvOut.v = { id: rv.id, user: rv.user, level: rv.level, realTime: rv.realTime };
+    rvOut.v = { id: rv.id, user: rv.user, level: rv.level, realTime: rv.realTime, tournamentId: rv.tournamentId };
 
     if (status === VIDEO_STATUS.BANNED) {
       // VideoScores::removeVideo
@@ -767,6 +768,13 @@ export async function reviewVideo(
   // 批量审核（video.batchReview）逐条走本函数，重建由 kickPreheat 的 1s trailing
   // 合并窗口收敛为一次。放 try 外调用自身已吞非请求上下文异常（refreshHomeNewsCache 内部处理）。
   refreshHomeNewsCache();
+
+  // 比赛名次快照打脏（2026-11-28）：过审(→20)/屏蔽(→0)/重审翻案都改变该录像
+  // 是否计入所挂比赛（status<>0 口径）→ 排行变。只在录像挂了比赛时打；放事务外、
+  // 自带 try/catch 不拖垮审核主流程（漏打由快照 60s TTL 兜底）。
+  if (rv0?.tournamentId && (status === VIDEO_STATUS.REVIEWED || status === VIDEO_STATUS.BANNED)) {
+    await bumpTourRankRev(rv0.tournamentId);
+  }
 
   return { ok: true };
 }

@@ -1558,6 +1558,12 @@ model Tournament {
   scoreConfig String @default("") @map("score_config") @db.VarChar(200) // 计算方式参数 JSON：sum_topn={"beg":2,"int":2,"exp":2}；target_diff={"target":8.88}（time，秒）
   windowHours Int @default(0) @map("window_hours") // 自选窗口时长（小时，0=无窗口即同期集体赛；>0=玩家在 [start,end] 内任选窗口手动开赛，张老师 2026-11-19）
   createTime BigInt  @default(0) @map("create_time") @db.BigInt // 创建时刻 Unix 秒
+  // 名次版本号（2026-11-28 全站 502 事故修复）：比赛录像集合/计分配置/判窗集合任一变化即 +1；
+  // 落后于 rank_snap_rev＝快照过期，读到时惰性重建。写点只 bump 不算名次。
+  rankRev BigInt @default(0) @map("rank_rev") @db.BigInt
+  // 快照对应的 rev + 重建时刻（与 tournament_rank_snapshot 同一事务写入）：过期判据只看这两列
+  rankSnapRev BigInt @default(0) @map("rank_snap_rev") @db.BigInt
+  rankSnapAt BigInt @default(0) @map("rank_snap_at") @db.BigInt // 快照重建时刻 Unix 秒
 
   @@index([startTime, endTime]) // 状态排序/筛选
   @@map("tournament")
@@ -1574,6 +1580,23 @@ model TournamentEntry {
   @@unique([tournamentId, userId])
   @@index([userId, createTime]) // 我的统计：参加比赛次数
   @@map("tournament_entry")
+}
+// 比赛排名快照（2026-11-28 全站 502 事故修复）：每场比赛一份「uid → 名次」落盘，
+// /tournaments「参赛记录·最高排名」改读本表（原 getTourMyStats 每次请求拉参赛比赛
+// 全部录像做巨型 IN 全表扫，单次 10-37s 占满 Prisma 连接池 → P2024 → 双槽 502）。
+// 名次口径与 getTourRanking 严格同源（同一次排序的 index+1）；rev=重建时的
+// tournament.rank_rev（同事务写入 rank_snap_rev），落后即过期惰性重建。
+model TournamentRankSnapshot {
+  id           BigInt @id @default(autoincrement()) @db.BigInt
+  tournamentId BigInt @map("competition_id") @db.BigInt
+  userId       BigInt @map("user_id") @db.BigInt
+  rank         Int
+  rev          BigInt @default(0) @db.BigInt
+  updateTime   BigInt @default(0) @map("update_time") @db.BigInt // 快照重建时刻 Unix 秒
+
+  @@unique([tournamentId, userId])
+  @@index([userId]) // 「我的最高排名」按 uid 聚合
+  @@map("tournament_rank_snapshot")
 }
 
 // 比赛动态（2026-11-13 二期，张老师定口径）：详情页「动态」板块数据源。

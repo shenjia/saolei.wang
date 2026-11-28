@@ -20,7 +20,7 @@ import { replayEvents } from "@/lib/videoradar";
 import { ONLINE_PROGRAM_MARKER } from "@/lib/avfwrite";
 import { RANKED_SOFTWARE } from "@/lib/evfwrite";
 import { evfSignature } from "@/core/src/lib/evf-sign";
-import { addTourEvent, TOUR_EVENT_SCORE, matchTourByRace, ensureTourEntry } from "@/lib/tournament";
+import { addTourEvent, TOUR_EVENT_SCORE, matchTourByRace, ensureTourEntry, bumpTourRankRev } from "@/lib/tournament";
 import { ensureVideoTriage } from "@/lib/videometrics";
 import { LEVEL_MIN_3BV, VIDEO_STATUS, UNREACHABLE_3BV, type VideoLevel } from "@/lib/config";
 import { getUser3bvCollection } from "@/lib/queries";
@@ -407,6 +407,8 @@ export async function uploadVideo(
     }
     await ensureTourEntry(Number(compAttach.id), session.uid, { windowStartSec });
     await addTourEvent(Number(compAttach.id), TOUR_EVENT_SCORE, session.uid);
+    // 名次快照打脏（2026-11-28）：待审盘也计入比赛录像集合（status<>0），新盘即改名次
+    await bumpTourRankRev(compAttach.id);
   }
 
   // 自动分拣后置钩子（2026-10-19 方案 v2）：事务提交后异步跑触发器组，

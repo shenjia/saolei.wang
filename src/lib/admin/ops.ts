@@ -27,7 +27,7 @@ import { rankEnter, rankLeave, safeRankOp, applyRankAreaChange } from "@/lib/use
 import { refreshUserStnb, refreshUserStnbNf } from "@/lib/userstnb";
 import { setMaintenance } from "@/lib/maintenance";
 import { normalizeSiteUpdateDate } from "@/lib/site-updates";
-import { genUniqueTourCode, addTourEvent, ensureTourEntry, TOUR_EVENT_JOIN_OPEN, TOUR_EVENT_SCORE } from "@/lib/tournament";
+import { genUniqueTourCode, addTourEvent, ensureTourEntry, bumpTourRankRev, TOUR_EVENT_JOIN_OPEN, TOUR_EVENT_SCORE } from "@/lib/tournament";
 
 /** 比赛标识参数校验（2026-11-18 张老师需求）：默认留空（null=不设置/保持不变）；
  *  手填时 1-10 位数字+大小写字母（与列宽 varchar(10) 一致），全库查重防撞（唯一索引兜底） */
@@ -1266,6 +1266,8 @@ async function dispatch(
       if (rawComp === 0) {
         if (!video.tournamentId) return { ok: false, error: "该录像未挂接比赛" };
         await prisma.video.update({ where: { id: BigInt(id) }, data: { tournamentId: null } });
+        // 名次快照打脏（2026-11-28）：该录像退出原比赛排行
+        await bumpTourRankRev(video.tournamentId);
         return { ok: true, message: `已解除录像 #${id} 的比赛挂接` };
       }
       const comp = await prisma.tournament.findUnique({
@@ -1282,6 +1284,9 @@ async function dispatch(
         where: { id: BigInt(id) },
         data: { tournamentId: BigInt(rawComp) },
       });
+      // 名次快照打脏（2026-11-28）：新比赛必打；换挂时原比赛也要重建
+      await bumpTourRankRev(rawComp);
+      if (video.tournamentId && video.tournamentId !== BigInt(rawComp)) await bumpTourRankRev(video.tournamentId);
       if (changed) {
         // 挂接即补报名（2026-11-22 张老师定「有成绩就该有报名记录」）：统一计时赛
         // 补报名动态与成绩动态同秒、id 更小 → 先报名、再成绩
@@ -1965,6 +1970,8 @@ async function dispatch(
           scoreConfig: scEdit?.config ?? "",
         },
       });
+      // 名次快照打脏（2026-11-28）：计分方式/收录级别/窗口/起止时刻任一变化都改排行
+      await bumpTourRankRev(id);
       return { ok: true, message: `已修改比赛 #${id}「${name}」` };
     }
 
@@ -1982,6 +1989,7 @@ async function dispatch(
       // 报名记录与动态一并清掉（无成绩/奖金挂接，级联安全）
       await prisma.tournamentEvent.deleteMany({ where: { tournamentId: BigInt(id) } });
       await prisma.tournamentEntry.deleteMany({ where: { tournamentId: BigInt(id) } });
+      await prisma.tournamentRankSnapshot.deleteMany({ where: { tournamentId: BigInt(id) } });
       // 挂接在本场比赛的录像解挂（比赛没了，competition_id 列 置回 NULL）
       await prisma.video.updateMany({ where: { tournamentId: BigInt(id) }, data: { tournamentId: null } });
       await prisma.tournament.delete({ where: { id: BigInt(id) } });
@@ -2020,17 +2028,23 @@ async function dispatch(
       const compBig = BigInt(compId);
       let moved = 0;
       let already = 0;
+      // 名次快照打脏（2026-11-28）：循环外按场去重各打一次，不在循环内逐条 bump
+      const touchedTours = new Set<bigint>([compBig]);
       for (const v of matched) {
         if (v.tournamentId === compBig) {
           already++;
           continue;
         }
         await prisma.video.update({ where: { id: v.id }, data: { tournamentId: compBig } });
-        if (v.tournamentId) moved++;
+        if (v.tournamentId) {
+          moved++;
+          touchedTours.add(v.tournamentId);
+        }
         // 挂接即补报名（2026-11-22 同口径）；幂等，同一玩家多条录像只补一次
         await ensureTourEntry(compId, Number(v.user));
         await addTourEvent(compId, TOUR_EVENT_SCORE, Number(v.user));
       }
+      for (const tid of touchedTours) await bumpTourRankRev(tid);
       const parts: string[] = [`已收录 ${matched.length - already} 条录像`];
       if (moved) parts.push(`${moved} 条从其他比赛转入`);
       if (already) parts.push(`${already} 条本就在本比赛`);

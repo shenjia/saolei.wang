@@ -420,96 +420,233 @@ export async function getTourGlobalStats(): Promise<TourGlobalStats> {
 export interface TourMyStats {
   joined: number; // 参加比赛次数（已报名数）
   /** 最高排名（2026-11-24 张老师需求：参赛记录不再恒「—」）——
-   *  我报名的全部比赛中按各场排行榜同口径（computePlayerScores + index+1）算出的最好名次 */
+   *  我报名的全部比赛中按各场排行榜同口径（getTourRanking 同源排序的 index+1）
+   *  算出的最好名次。2026-11-28 起改读 tournament_rank_snapshot 落盘快照。 */
   bestRank: number | null;
   prize: number; // 累计奖金（成绩采集下一期接入）
 }
 
+/** 快照惰性重建的 TTL 兜底（秒）：写点漏 bump 时最长这么久后自愈。
+ *  正常路径靠 bumpTourRankRev 即时打脏；TTL 只兜「脚本直灌库/未知旁路」的写入。 */
+const TOUR_RANK_SNAPSHOT_TTL_SEC = 60;
+
+/** 单飞表：同一场比赛的快照重建并发只跑一次（两个登录用户同时打开 /tournaments
+ *  且快照恰好过期时，不重复付全量算分）。key=cid，value=进行中的 Promise。 */
+const tourRankRebuilding = new Map<number, Promise<void>>();
+
+/** 给录像 id 集合补 video_info / video_metrics（比赛算分输入）——分块 IN 查询。
+ *  ⚠️ 单条 IN 的元素个数必须封顶（2026-11-28 全站 502 事故）：金羊杯单场 1.1 万盘，
+ *  原实现把全部录像 id 塞进一条 `WHERE id IN (…35017 个…)`——MySQL 对超长 IN 列表
+ *  放弃 PRIMARY 走全表扫描（Rows_examined 38.7 万），单条 SQL 文本数百 KB，
+ *  慢日志实测单次 36.9s。分块后每条都是 PK range 点查。 */
+const TOUR_IN_CHUNK = 1000;
+async function tourInfosByIds(ids: bigint[]) {
+  const out: { id: bigint; realTime: number; board3bv: number; noRecord: boolean }[] = [];
+  for (let i = 0; i < ids.length; i += TOUR_IN_CHUNK) {
+    const chunk = ids.slice(i, i + TOUR_IN_CHUNK);
+    out.push(
+      ...(await prisma.videoInfo.findMany({
+        where: { id: { in: chunk } },
+        select: { id: true, realTime: true, board3bv: true, noRecord: true },
+      }))
+    );
+  }
+  return out;
+}
+async function tourMetricsByIds(ids: bigint[]) {
+  const out: { id: bigint; bvs: number; ioe: number; thrp: number; cp: number }[] = [];
+  for (let i = 0; i < ids.length; i += TOUR_IN_CHUNK) {
+    const chunk = ids.slice(i, i + TOUR_IN_CHUNK);
+    out.push(
+      ...(await prisma.videoMetrics.findMany({
+        where: { id: { in: chunk } },
+        select: { id: true, bvs: true, ioe: true, thrp: true, cp: true },
+      }))
+    );
+  }
+  return out;
+}
+
+/** 比赛算分输入（getTourRanking 与排名快照共用的唯一加载口径）。
+ *  录像集：FORCE INDEX(video_competition_id_create_time_idx)——优化器对大赛
+ *  `competition_id IN (…)` 常判全表扫更划算（EXPLAIN type=ALL rows=387521，
+ *  2026-11-28 生产实证），这里语义就是「按比赛取录像」，强制走索引。
+ *  判窗口径与 getTourRanking 原实现逐行一致（集体赛不过滤；窗口赛有会话才按会话窗）。 */
+interface TourScoreInputRow {
+  id: bigint;
+  user: bigint;
+  level: string;
+  createTime: bigint;
+}
+async function loadTourScoreInput(cid: bigint) {
+  const comp = await prisma.tournament.findUnique({
+    where: { id: cid },
+    select: { scoreMode: true, scoreConfig: true, windowHours: true, includeLevels: true },
+  });
+  if (!comp) return null;
+  const rows = await prisma.$queryRawUnsafe<TourScoreInputRow[]>(
+    "SELECT v.id, v.user, v.level, v.create_time AS createTime FROM video v FORCE INDEX (video_competition_id_create_time_idx) WHERE v.competition_id = ? AND v.status <> 0",
+    cid
+  );
+  // 窗口赛（windowHours>0 且存在个人会话记录）按玩家各自的会话窗口收录像。
+  // ⚠️ 会话表为空的 windowHours>0 比赛（历届导入带默认值 2）按集体赛处理，
+  // 否则全部录像被判窗外＝金羊杯排行榜/图表清空事故
+  const sessionWindows = comp.windowHours
+    ? await prisma.tournamentWindowSession.findMany({
+        where: { tournamentId: cid },
+        select: { userId: true, startTime: true, endTime: true },
+      })
+    : [];
+  const sessByUser = new Map(sessionWindows.map((s) => [Number(s.userId), s]));
+  const useSessWindow = !!comp.windowHours && sessionWindows.length > 0;
+  const inWindow = useSessWindow
+    ? rows.filter((r) => {
+        const sw = sessByUser.get(Number(r.user));
+        const t = Number(r.createTime);
+        return !!sw && t >= Number(sw.startTime) && t <= Number(sw.endTime);
+      })
+    : rows;
+  const ids = inWindow.map((r) => r.id);
+  const metric = parseScoreConfig(comp.scoreMode, comp.scoreConfig)?.metric ?? "time";
+  const needsMetrics = metric !== "time" && metric !== "3bv";
+  const [infos, metricsRows] = await Promise.all([
+    tourInfosByIds(ids),
+    needsMetrics ? tourMetricsByIds(ids) : Promise.resolve([]),
+  ]);
+  const infoMap = new Map(infos.map((i) => [i.id, i]));
+  const metricsMap = new Map(metricsRows.map((m) => [m.id, m]));
+  /** 单盘 metric 值（score 域；无效 0）——与 getTourEventsPage.metricValueOf 同口径 */
+  const metricValueOf = (vid: bigint): number => {
+    if (metric === "time") {
+      const info = infoMap.get(vid);
+      return info && !info.noRecord ? info.realTime : 0;
+    }
+    if (metric === "3bv") {
+      const info = infoMap.get(vid);
+      return info && !info.noRecord ? info.board3bv * 1000 : 0;
+    }
+    const m = metricsMap.get(vid);
+    if (!m) return 0;
+    const raw = metric === "3bvs" ? m.bvs : metric === "ioe" ? m.ioe : metric === "thrp" ? m.thrp : m.cp;
+    return raw > 0 ? raw * 1000 : 0;
+  };
+  return {
+    comp,
+    inWindow,
+    infoMap,
+    metricValueOf,
+    tourVids: inWindow.map((r) => ({
+      user: r.user,
+      level: r.level,
+      value: metricValueOf(r.id),
+      noRecord: infoMap.get(r.id)?.noRecord ?? false,
+      t: Number(r.createTime), // 同分决胜用：总分出现时刻（2026-11-27 张老师定）
+    })),
+  };
+}
+
+/** 比赛全体玩家排序结果（名次口径唯一来源）：总分为主，同分按总分出现先后排
+ *  （先出现者排前，compareTourScores+scoreAppearTimes，2026-11-27 张老师定）。
+ *  返回 [uid, score] 有序数组，名次 = index+1（不合并并列）。 */
+async function rankTourPlayers(cid: bigint) {
+  const input = await loadTourScoreInput(cid);
+  if (!input) return null;
+  const includeLv = input.comp.includeLevels.split(",").map((x) => x.trim()).filter(Boolean);
+  const scores = computePlayerScores(input.comp.scoreMode, input.comp.scoreConfig, input.tourVids, includeLv);
+  if (!scores.size) return [];
+  const tMap = scoreAppearTimes(input.comp.scoreMode, input.comp.scoreConfig, input.tourVids, includeLv);
+  return [...scores.entries()].sort((a, b) => compareTourScores(a[1], b[1], parseScoreConfig(input.comp.scoreMode, input.comp.scoreConfig)?.desc ?? false, tMap.get(a[0]), tMap.get(b[0])));
+}
+
+/** 重建一场比赛的排名快照（事务内原子）：推进 rank_rev → 删旧快照 → 插新快照，
+ *  并把「快照对应的 rev + 重建时刻」记回 tournament.rank_snap_rev / rank_snap_at。
+ *  过期判据只看 tournament 这两列（一次主键查询），不聚合快照表——空快照比赛
+ *  （无人有有效录像）同样留下「已建过」痕迹，不会每次读都重建。 */
+async function rebuildTourRankSnapshotNow(cid: bigint): Promise<void> {
+  const sorted = await rankTourPlayers(cid);
+  if (sorted === null) return; // 比赛已不存在
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  await prisma.$transaction(async (tx) => {
+    const bumped = await tx.tournament.update({
+      where: { id: cid },
+      data: { rankRev: { increment: 1 } },
+      select: { rankRev: true },
+    });
+    await tx.tournamentRankSnapshot.deleteMany({ where: { tournamentId: cid } });
+    if (sorted.length) {
+      await tx.tournamentRankSnapshot.createMany({
+        data: sorted.map(([uid], i) => ({
+          tournamentId: cid,
+          userId: BigInt(uid),
+          rank: i + 1,
+          rev: bumped.rankRev,
+          updateTime: now,
+        })),
+      });
+    }
+    await tx.tournament.update({
+      where: { id: cid },
+      data: { rankSnapRev: bumped.rankRev, rankSnapAt: now },
+    });
+  });
+}
+
+/** 惰性重建入口：tournament.rank_snap_rev 落后于 rank_rev（写点 bump 过）、或快照
+ *  超过 TTL 即重建。单飞：同场并发请求共享同一次重建。 */
+async function ensureTourRankSnapshot(cid: bigint): Promise<void> {
+  const comp = await prisma.tournament.findUnique({
+    where: { id: cid },
+    select: { rankRev: true, rankSnapRev: true, rankSnapAt: true },
+  });
+  if (!comp) return;
+  const stale =
+    comp.rankSnapRev < comp.rankRev ||
+    Number(comp.rankSnapAt) + TOUR_RANK_SNAPSHOT_TTL_SEC < Math.floor(Date.now() / 1000);
+  if (!stale) return;
+  let inflight = tourRankRebuilding.get(Number(cid));
+  if (!inflight) {
+    inflight = rebuildTourRankSnapshotNow(cid).finally(() => tourRankRebuilding.delete(Number(cid)));
+    tourRankRebuilding.set(Number(cid), inflight);
+  }
+  await inflight;
+}
+
+/** 写点打脏（2026-11-28）：任一会改变某场比赛名次的写入后调用——只推进 rank_rev，
+ *  不算名次（算分昂贵且写点在请求路径上）；下一个读到该场快照的请求惰性重建。
+ *  失败只告警不抛：打脏失败由快照 TTL 兜底自愈，不能拖垮主业务写入。 */
+export async function bumpTourRankRev(tournamentId: bigint | number): Promise<void> {
+  try {
+    await prisma.tournament.update({
+      where: { id: BigInt(tournamentId) },
+      data: { rankRev: { increment: 1 } },
+    });
+  } catch (e) {
+    // P2025（比赛已不存在，如并发删除）是预期内，静默；其余才告警
+    if ((e as { code?: string })?.code !== "P2025") {
+      console.warn("[tournament] bumpTourRankRev 失败", String(tournamentId), e);
+    }
+  }
+}
+
+/** 「参赛记录」：参赛次数 + 最高排名。2026-11-28 起最高排名改读落盘快照——
+ *  原实现每次请求拉「我报名的全部比赛」的全部录像再巨型 IN 回查（每人 1~3 条
+ *  全表扫、10-37s、独占一条连接），5 连接的 Prisma 池被几名登录用户同时打开
+ *  列表页即占满 → P2024 → 全站 502。现在：报名行（索引点查）→ 每场快照的
+ *  rev 校验（tournament 主键一次查询）→ 快照行按 (场,uid) 唯一点查。快照过期才付一次重建，
+ *  且重建走 FORCE INDEX + 分块 IN。 */
 export async function getTourMyStats(uid: number): Promise<TourMyStats> {
   const entries = await prisma.tournamentEntry.findMany({
     where: { userId: BigInt(uid) },
     select: { tournamentId: true },
   });
-  const compIds = [...new Set(entries.map((e) => Number(e.tournamentId)))];
   let bestRank: number | null = null;
-  if (compIds.length) {
-    const bigIds = compIds.map((n) => BigInt(n));
-    // 一次取齐我报名比赛的 配置/录像/会话/明细 四表，按场分组算名次（不逐场 N×5）
-    const [comps, vids, sessions] = await Promise.all([
-      prisma.tournament.findMany({
-        where: { id: { in: bigIds } },
-        select: { id: true, scoreMode: true, scoreConfig: true, includeLevels: true, windowHours: true },
-      }),
-      prisma.video.findMany({
-        where: { tournamentId: { in: bigIds }, status: { not: 0 } },
-        select: { id: true, tournamentId: true, user: true, level: true, createTime: true },
-      }),
-      prisma.tournamentWindowSession.findMany({
-        where: { tournamentId: { in: bigIds } },
-        select: { tournamentId: true, userId: true, startTime: true, endTime: true },
-      }),
-    ]);
-    const infos = await prisma.videoInfo.findMany({
-      where: { id: { in: vids.map((v) => v.id) } },
-      select: { id: true, realTime: true, board3bv: true, noRecord: true },
+  for (const cid of new Set(entries.map((e) => e.tournamentId))) {
+    await ensureTourRankSnapshot(cid);
+    const row = await prisma.tournamentRankSnapshot.findUnique({
+      where: { tournamentId_userId: { tournamentId: cid, userId: BigInt(uid) } },
+      select: { rank: true },
     });
-    const infoMap = new Map(infos.map((i) => [i.id, i]));
-    const metrics = vids.length
-      ? await prisma.videoMetrics.findMany({
-          where: { id: { in: vids.map((v) => v.id) } },
-          select: { id: true, bvs: true, ioe: true, thrp: true, cp: true },
-        })
-      : [];
-    const metricMap = new Map(metrics.map((m) => [m.id, m]));
-    for (const comp of comps) {
-      const conf = parseScoreConfig(comp.scoreMode, comp.scoreConfig);
-      if (!conf) continue;
-      // 判窗与 getTourRanking 同源：集体赛（含会话表空的历届导入）不过滤上传时间；
-      // 窗口赛按各玩家自己的会话窗收录像
-      const compSess = sessions.filter((s) => String(s.tournamentId) === String(comp.id));
-      const useSess = !!comp.windowHours && compSess.length > 0;
-      const sessBy = new Map(compSess.map((s) => [Number(s.userId), s]));
-      const inWin = vids.filter((v) => {
-        if (String(v.tournamentId) !== String(comp.id)) return false;
-        if (!useSess) return true;
-        const s = sessBy.get(Number(v.user));
-        const t = Number(v.createTime);
-        return !!s && t >= Number(s.startTime) && t <= Number(s.endTime);
-      });
-      if (!inWin.length) continue;
-      const levelMap = new Map(inWin.map((v) => [v.id, v.level]));
-      const valueOf = (vid: bigint): number => {
-        if (conf.metric === "time") {
-          const info = infoMap.get(vid);
-          return info && !info.noRecord ? info.realTime : 0;
-        }
-        if (conf.metric === "3bv") {
-          const info = infoMap.get(vid);
-          return info && !info.noRecord ? info.board3bv * 1000 : 0;
-        }
-        const m = metricMap.get(vid);
-        if (!m) return 0;
-        const raw = conf.metric === "3bvs" ? m.bvs : conf.metric === "ioe" ? m.ioe : conf.metric === "thrp" ? m.thrp : m.cp;
-        return raw > 0 ? raw * 1000 : 0;
-      };
-      const compVids = inWin.map((v) => ({
-        user: v.user,
-        level: levelMap.get(v.id) ?? "",
-        value: valueOf(v.id),
-        noRecord: infoMap.get(v.id)?.noRecord ?? false,
-        t: Number(v.createTime),
-      }));
-      const includeLv = comp.includeLevels.split(",").map((s) => s.trim()).filter(Boolean);
-      const scores = computePlayerScores(comp.scoreMode, comp.scoreConfig, compVids, includeLv);
-      const tMap = scoreAppearTimes(comp.scoreMode, comp.scoreConfig, compVids, includeLv);
-      // 名次口径与 getTourRanking 完全一致（排序后 index+1，不合并并列；
-      // 同分按总分出现先后排，2026-11-27 张老师定）
-      const sorted = [...scores.entries()].sort((a, b) =>
-        compareTourScores(a[1], b[1], conf.desc, tMap.get(a[0]), tMap.get(b[0]))
-      );
-      const idx = sorted.findIndex(([u]) => u === uid);
-      if (idx >= 0 && (bestRank === null || idx + 1 < bestRank)) bestRank = idx + 1;
-    }
+    if (row && (bestRank === null || row.rank < bestRank)) bestRank = row.rank;
   }
   return { joined: entries.length, bestRank, prize: 0 };
 }
@@ -1376,94 +1513,27 @@ const fetchTourListChartCached = (compId: number) => {
  *  先后排（先出现者排前，compareTourScores+scoreAppearTimes，2026-11-27 张老师定）。 */
 /** limit=null 表示不截断（图表用全部有成绩参赛者）；数字仍按名次取前 N（右栏排行榜用 10）。 */
 export async function getTourRanking(compId: number, limit: number | null = 10): Promise<TourRankRow[]> {
-  const comp = await prisma.tournament.findUnique({
-    where: { id: BigInt(compId) },
-    select: { startTime: true, endTime: true, scoreMode: true, scoreConfig: true, windowHours: true, includeLevels: true },
-  });
-  if (!comp) return [];
-  const conf = parseScoreConfig(comp.scoreMode, comp.scoreConfig);
-  const metric = conf?.metric ?? "time";
+  const cid = BigInt(compId);
+  const input = await loadTourScoreInput(cid);
+  if (!input) return [];
+  const conf = parseScoreConfig(input.comp.scoreMode, input.comp.scoreConfig);
   const desc = conf?.desc ?? false;
-  // 时间过滤口径（2026-11-21 张老师反馈 niu1 排行榜/图表为空）：集体赛（windowHours=0）
-  // **不做上传时间过滤**——管理员挂接即视为参赛成绩（历史盘窗外补挂同样有效）；
-  // 窗口赛（windowHours>0 且存在个人会话记录）按玩家各自的会话窗口收录像。
-  // ⚠️ 会话表为空的 windowHours>0 比赛（历届导入带默认值 2）按集体赛处理，
-  // 否则全部录像被判窗外＝金羊杯排行榜/图表清空事故
-  const sessionWindows = comp.windowHours
-    ? await prisma.tournamentWindowSession.findMany({
-        where: { tournamentId: BigInt(compId) },
-        select: { userId: true, startTime: true, endTime: true },
-      })
-    : [];
-  const sessByUser = new Map(sessionWindows.map((s) => [Number(s.userId), s]));
-  const useSessWindow = !!comp.windowHours && sessionWindows.length > 0;
-  const rows = await prisma.video.findMany({
-    where: {
-      tournamentId: BigInt(compId),
-      status: { not: 0 },
-    },
-    select: { id: true, user: true, level: true, createTime: true },
-  });
-  const inWindow = useSessWindow
-    ? rows.filter((r) => {
-        const s = sessByUser.get(Number(r.user));
-        const t = Number(r.createTime);
-        return !!s && t >= Number(s.startTime) && t <= Number(s.endTime);
-      })
-    : rows;
-  const levelMap = new Map(inWindow.map((r) => [r.id, r.level]));  const infos = await prisma.videoInfo.findMany({
-    where: { id: { in: rows.map((r) => r.id) } },
-    select: { id: true, realTime: true, board3bv: true, noRecord: true },
-  });
-  const infoMap = new Map(infos.map((i) => [i.id, i]));
-  const needsMetrics = metric !== "time" && metric !== "3bv";
-  const metricsRows = needsMetrics
-    ? await prisma.videoMetrics.findMany({
-        where: { id: { in: rows.map((r) => r.id) } },
-        select: { id: true, bvs: true, ioe: true, thrp: true, cp: true },
-      })
-    : [];
-  const metricsMap = new Map(metricsRows.map((m) => [m.id, m]));
-  /** 单盘 metric 值（score 域；无效 0）——与 getTourEventsPage.metricValueOf 同口径 */
-  const metricValueOf = (vid: bigint): number => {
-    if (metric === "time") {
-      const info = infoMap.get(vid);
-      return info && !info.noRecord ? info.realTime : 0;
-    }
-    if (metric === "3bv") {
-      const info = infoMap.get(vid);
-      return info && !info.noRecord ? info.board3bv * 1000 : 0;
-    }
-    const m = metricsMap.get(vid);
-    if (!m) return 0;
-    const raw = metric === "3bvs" ? m.bvs : metric === "ioe" ? m.ioe : metric === "thrp" ? m.thrp : m.cp;
-    return raw > 0 ? raw * 1000 : 0;
-  };
-  const tourVids = inWindow.map((r) => ({
-    user: r.user,
-    level: levelMap.get(r.id) ?? "",
-    value: metricValueOf(r.id),
-    noRecord: infoMap.get(r.id)?.noRecord ?? false,
-    t: Number(r.createTime), // 同分决胜用：总分出现时刻（2026-11-27 张老师定）
-  }));
-  const includeLv = comp.includeLevels.split(",").map((s) => s.trim()).filter(Boolean);
-  const scores = computePlayerScores(comp.scoreMode, comp.scoreConfig, tourVids, includeLv);
-  // 总分出现时刻（同分决胜：总分相同按出现先后排，先出现者排前）
-  const tMap = scoreAppearTimes(comp.scoreMode, comp.scoreConfig, tourVids, includeLv);
+  const includeLv = input.comp.includeLevels.split(",").map((x) => x.trim()).filter(Boolean);
+  const scores = computePlayerScores(input.comp.scoreMode, input.comp.scoreConfig, input.tourVids, includeLv);
   if (!scores.size) return [];
+  // 总分出现时刻（同分决胜：总分相同按出现先后排，先出现者排前）
+  const tMap = scoreAppearTimes(input.comp.scoreMode, input.comp.scoreConfig, input.tourVids, includeLv);
   // 代表盘 = 该玩家窗口内最好一局（按 metric/方向；总成绩是多盘合成，链接供看最好盘）
   const bestBy = new Map<number, { time: number; videoId: number }>();
-  for (const r of inWindow) {
-    const v = metricValueOf(r.id);
+  for (const r of input.inWindow) {
+    const v = input.metricValueOf(r.id);
     if (!v) continue;
     const uid = Number(r.user);
     const prev = bestBy.get(uid);
     if (!prev || (desc ? v > prev.time : v < prev.time)) bestBy.set(uid, { time: v, videoId: Number(r.id) });
   }
   // 排序：总分为主，同分按总分出现先后排（先出现者排前，2026-11-27 张老师定）
-  const sorted = [...scores.entries()].sort((a, b) =>
-    compareTourScores(a[1], b[1], desc, tMap.get(a[0]), tMap.get(b[0]))
-  );
+  const sorted = [...scores.entries()].sort((a, b) => compareTourScores(a[1], b[1], desc, tMap.get(a[0]), tMap.get(b[0])));
   const ranked = limit === null ? sorted : sorted.slice(0, limit);
   const uids = ranked.map(([uid]) => BigInt(uid));
   const [users, scoreRows] = await Promise.all([

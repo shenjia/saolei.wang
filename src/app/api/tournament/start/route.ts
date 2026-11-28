@@ -14,7 +14,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { ensureTourEntry } from "@/lib/tournament";
+import { ensureTourEntry, bumpTourRankRev } from "@/lib/tournament";
 
 const RACE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 去 I/O/0/1 易混字符
 
@@ -104,6 +104,8 @@ export async function POST(req: Request) {
     });
     // 开赛即补报名：报名行+比赛动态 type=2+个人动态 type=58，报名时间=窗口 start_time
     await ensureTourEntry(id, session.uid, { windowStartSec: start });
+    // 名次快照打脏（2026-11-28）：新会话改变该玩家的判窗集合（进行中幂等返回不打）
+    await bumpTourRankRev(id);
     return NextResponse.json({
       ok: true,
       race: created.race,
