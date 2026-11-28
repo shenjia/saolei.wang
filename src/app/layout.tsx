@@ -255,7 +255,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {!session && <BotChallengeGate />}
         <ToastHost />
         {/* 粉丝端「正在练习」通知气泡（2026-11-27 张老师需求）：登录才轮询；
-            右下角悬浮、点击新标签旁观、同一场只弹一次（页面级，口径见 LiveNotifyHost） */}
+            右下角悬浮、点击新标签旁观、同一场练习只弹一次（页面级，口径见 LiveNotifyHost） */}
         {session && <LiveNotifyHost />}
         <ConfirmHost />
         {/* 论坛正文小图点击看大图（2026-10-27）：事件委托，全站生效（含 admin） */}

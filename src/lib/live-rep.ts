@@ -1,17 +1,25 @@
 /**
- * 排行局「伪直播」rep 落盘与下发（2026-11-27 张老师需求）。
+ * 排行局「旁观」rep 落盘与下发（2026-11-27 张老师需求）。
  *
  * 形态：服务端按 gameId 存每局 EVF（含踩雷/重开的未完成局），观众端轮询拿
- * 已封口的局自动连播——伪直播，无进度条、无「回放/上一局」字样。局级 rep
+ * 已封口的局自动连播——旁观形态，无进度条、无「回放/上一局」字样。局级 rep
  * 天然消除了实时观战的场外报点作弊，也绕开长连接扇出/时钟同步的成本。
  *
  * 落盘结构（data/live-rep/<uid>/，已 gitignore；⚠️ 必须放在 public 之外——
  * pending 是进行中局的完整快照（含全部雷位），public 下会被静态直下、
- * 破坏「局级 rep 消除报点作弊」的设计前提；下发一律走 /api/live/rep 粉丝闸）：
- *   state.json              { gameId, lastAt, level } 当前活跃局（心跳保活）
+ * 破坏「局级 rep 消除报点作弊」的设计前提；下发一律走 /api/watch/rep 粉丝闸）：
+ *   state.json              { gameId, lastAt, level, sessionId } 当前活跃局（心跳保活）
  *   pending/<gameId>.evf    本局最新快照（每次心跳原子覆盖，绝不对客户端下发）
- *   reps/<gameId>.evf       已封口局（观众经 /api/live/rep 鉴权拉取）
+ *   reps/<gameId>.evf       已封口局（观众经 /api/watch/rep 鉴权拉取）
  *   index.json              { uid, reps: [...] } 已封口局队列（≤20 条 / 24h）
+ *
+ * **旁观会话 sessionId（2026-11-28 张老师定）**：玩家从未旁观 → 开始即开一场
+ * 新会话，state 与该场封口的每条 rep 都打上同一 sessionId。feed **只下发当前
+ * 这一场的 rep**：玩家停止后不再下发录像；开新一场只下发新录像（上一场的
+ * 旧 rep 仍在 index 里做 24h 滚动清理，但永不再下发）。
+ * 「开新会话」判定：state 不存在（从未旁观 / 超时封口后已摘）、或**换局**且心跳
+ * 已超 LIVE_STALE_MS（停了又开新局）、或旧 state 无 sessionId（部署遗留）。
+ * 同局卡顿超时后恢复**沿用**——不是停止，否则同局被切成两场。
  *
  * 封口时机：换局（重开/切级别/新局）、局终 final 心跳、观众轮询发现的超时局。
  * 封口优先用 pending 文件——即便权威已清内存（30min TTL）或败局没落盘，
@@ -32,14 +40,14 @@ import { BOARD_SIZE, type VideoLevel } from "./config";
 const ROOT = path.join(process.cwd(), "data", "live-rep");
 const KEEP_COUNT = 20;
 const KEEP_MS = 24 * 60 * 60 * 1000;
-/** state 超过此时时长未心跳＝主播已断线，观众轮询时触发封口（3s 心跳 × 4 倍余量） */
+/** state 超过此时时长未心跳＝玩家已断线，观众轮询时触发封口（3s 心跳 × 4 倍余量） */
 export const LIVE_STALE_MS = 12_000;
 
 /* ---- 观众计数（2026-11-27 14:12 张老师需求）----
  * feed 路由每次被粉丝拉取时上报（feedViewerTouch）；心跳响应带回
  * viewers（练习页「自定义」tab 变「x人旁观」）。内存单例（dev 单进程
- * 足够，不落盘）：key＝`<主播uid>:<观众uid>` → 最近活跃时刻，
- * 超过 VIEWER_TTL_MS 的对子视为离场；viewerCount 按主播聚合去重。
+ * 足够，不落盘）：key＝`<被旁观玩家uid>:<观众uid>` → 最近活跃时刻，
+ * 超过 VIEWER_TTL_MS 的对子视为离场；viewerCount 按被旁观玩家聚合去重。
  * ⚠️ 单例必须挂 globalThis（2026-11-27 15:15 实证）：Turbopack dev 下
  * page bundle 与 API route bundle 各自实例化本模块，模块级变量不互通
  * （feed touch 写入、user page SSR 读到 0）——globalThis 强制跨 bundle
@@ -55,7 +63,7 @@ const viewerLastSeen: Map<string, LiveViewerSeen> =
   viewerG.__liveViewers ?? (viewerG.__liveViewers = new Map<string, LiveViewerSeen>());
 const lastSweepBox = { get: () => viewerG.__liveViewersSweep ?? 0, set: (v: number) => { viewerG.__liveViewersSweep = v; } };
 
-/** 观众拉 feed 时记录在场（feed 路由调用；主播本人不算观众） */
+/** 观众拉 feed 时记录在场（feed 路由调用；被旁观玩家本人不算观众） */
 export function feedViewerTouch(streamerUid: number, viewerUid: number): void {
   const now = Date.now();
   const key = `${streamerUid}:${viewerUid}`;
@@ -71,7 +79,7 @@ export function feedViewerTouch(streamerUid: number, viewerUid: number): void {
   }
 }
 
-/** 当前活跃观众 uid（主播侧名单气泡用）——与 viewerCount 共用同一 Map、同一 TTL，
+/** 当前活跃观众 uid（被旁观玩家侧名单气泡用）——与 viewerCount 共用同一 Map、同一 TTL，
  *  不在线观众不会出现在名单里；数组按 uid 升序，最终展示顺序由名单接口按军衔排。 */
 export function activeViewerIds(streamerUid: number): number[] {
   return activeViewerSessions(streamerUid).map((s) => s.uid);
@@ -91,7 +99,7 @@ export function activeViewerSessions(streamerUid: number): { uid: number; firstA
   return out.sort((a, b) => a.uid - b.uid);
 }
 
-/** 当前观众数（主播侧：心跳响应带回）——按主播聚合最近活跃的独立观众 */
+/** 当前观众数（被旁观玩家侧：心跳响应带回）——按被旁观玩家聚合最近活跃的独立观众 */
 export function viewerCount(streamerUid: number): number {
   return activeViewerIds(streamerUid).length;
 }
@@ -106,7 +114,11 @@ export interface LiveRepState {
   gameId: string;
   lastAt: number;
   level: VideoLevel;
-  /** 允许旁观（2026-11-27 张老师定，主播开关，缺省 true）：false＝主播关掉了
+  /** 旁观会话 id（2026-11-28 张老师定）：本次「开始 → 停止」一轮的唯一标识，
+   *  由 heartbeat 在开新会话时生成；封口时写进 LiveRepMeta——feed 据此只下发
+   *  当前这一场的 rep。旧 state 无此字段＝部署前遗留，下一次心跳按新会话处理 */
+  sessionId?: string;
+  /** 允许旁观（2026-11-27 张老师定，玩家开关，缺省 true）：false＝玩家关掉了
    * 旁观（或旧 state 无此字段默认允许） */
   allow?: boolean;
   /** 当前局胜负（2026-11-27 18:54 张老师定：观众端优先放已完成局）——
@@ -138,6 +150,9 @@ export interface LiveRepMeta {
   scoreMs: number;
   won: boolean;
   at: number;
+  /** 所属旁观会话（2026-11-28 张老师定）：封口时从 state 抄来。feed 只下发
+   *  与当前 state.sessionId 相符的 rep；旧 index 条目无此字段＝永不匹配 */
+  sessionId?: string;
 }
 
 export interface LiveRepIndex {
@@ -171,12 +186,35 @@ export function getState(uid: number): LiveRepState | null {
   return s && isSafeGameId(s.gameId) && typeof s.lastAt === "number" ? s : null;
 }
 
+/** 新旁观会话 id：时间戳前缀（可读、单调）+ 随机后缀（同一毫秒开始不撞） */
+function newSessionId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function getIndex(uid: number): LiveRepIndex {
   const idx = readJson<LiveRepIndex>(indexFile(uid));
   return idx && Array.isArray(idx.reps) ? idx : { uid, reps: [] };
 }
 
-/** 主播是否「正在直播」：有活跃 state 且心跳在 LIVE_STALE_MS 内且未关旁观 */
+/**
+ * 当前旁观会话的已封口 rep（2026-11-28 张老师定，feed 唯一选局数据源）。
+ *
+ * 口径：玩家**未在练习** → 恒空（停止后 feed 不再下发录像；刷新旁观页也不会
+ * 拿到上一场的录像）。进行中 → 只返回 state.sessionId 相符的 rep（开新一场只下
+ * 新录像）；部署前遗留的无 sessionId 旧条目永不匹配。
+ *
+ * ⚠️ 调用前必须已执行 sealIfStale——玩家断线未发 final 的最后一局要先封口
+ *    进队列，否则本函数读到的是 state 已摘（＝已停止）→ 最后一局不下发。
+ *    现有调用序（feed 路由）：sealIfStale → 本函数，已满足。
+ */
+export function currentSessionReps(uid: number): LiveRepMeta[] {
+  const s = getState(uid);
+  if (!s || !s.sessionId || s.allow === false) return [];
+  if (Date.now() - s.lastAt >= LIVE_STALE_MS) return [];
+  return getIndex(uid).reps.filter((r) => r.sessionId === s.sessionId);
+}
+
+/** 玩家是否「正在练习」（可被旁观）：有活跃 state 且心跳在 LIVE_STALE_MS 内且未关旁观 */
 export function isLiveNow(uid: number): boolean {
   const s = getState(uid);
   return !!s && Date.now() - s.lastAt < LIVE_STALE_MS && s.allow !== false;
@@ -200,7 +238,7 @@ async function playerLabel(uid: number): Promise<string> {
 
 /** 权威快照 → EVF。快照字段口径与 report 路由的反作弊凭据同源。
  *  player 标识（2026-11-27 20:11 张老师定）：与排行模式同口径「#uid 玩家名」；
- *  查不到名（刚注册即开播等极端情况）兜底旧「#宽x高」尺寸标识。 */
+ *  查不到名（刚注册即开始练习等极端情况）兜底旧「#宽x高」尺寸标识。 */
 function snapshotToEvf(g: {
   width: number; height: number; mines: number; board: number[];
   bbbv: number; scoreCsec: number; scoreMs?: number;
@@ -276,7 +314,7 @@ async function compEndOf(compId: number): Promise<number | undefined> {
  *   final 心跳照常封口（本局 rep 不丢）
  * @param compId 比赛模式（2026-11-27 20:30 张老师定）：>0＝本局属该比赛
  *   （练习页 comp.id）——state 带 compId/compName 供观众端展示；非比赛局
- *   心跳不带字段，state 自动清空（退出比赛模式直播标记即时切回练习）
+ *   心跳不带字段，state 自动清空（退出比赛模式旁观标记即时切回练习）
  * @param compEnd 比赛倒计时终点（Unix 秒，21:25 张老师定）：随 compId 落
  *   state，旁观页比赛名后剩余时间括号显示 */
 export async function heartbeat(uid: number, gameId: string, level: VideoLevel, final: boolean, allow = true, compId?: number, compEnd?: number): Promise<HeartbeatResult> {
@@ -287,6 +325,23 @@ export async function heartbeat(uid: number, gameId: string, level: VideoLevel, 
     const done = seal(uid, prev.gameId);
     if (done) sealed.push(prev.gameId);
   }
+  /* 旁观会话（2026-11-28 张老师定「停止后 feed 不应再下发录像，开新一场只下
+   * 新录像」）——开新会话的判据，三条任一成立：
+   *   ① state 不存在（从未旁观 / 观众轮询 sealIfStale 超时封口后已摘 state）
+   *   ② **换局** 且 state 心跳已超时（玩家停了又回来开新局——没人轮询时 state
+   *      残留，这是「上一场结束」的权威边界）
+   *   ③ 旧 state 无 sessionId（部署前遗留，下一次心跳按新会话处理）
+   * 其余一律沿用（同一场内 3s 心跳保活 / 换局 / **同局卡顿 >12s 后恢复**）。
+   * ⚠️ 同局超时**必须沿用**（11-28 02:11 沙箱实测踩到）：只看「心跳超时」会把
+   *    卡顿（切标签页 / 休眠恢复 / 网络抖动）误判成停止——同局被切成两场，
+   *    前半场的 rep 永不再下发，观众眼前录像凭空消失。
+   * ⚠️ 必须在上方「换局封口」**之后**判定：seal() 抄的是 state 里的 sessionId，
+   *    旧局要归到上一场——先封口再换会话，旧 rep 才不会被错标进新场。 */
+  const now = Date.now();
+  const stale = !!prev && now - prev.lastAt >= LIVE_STALE_MS;
+  const switched = !!prev && prev.gameId !== gameId;
+  const newSession = !prev || (switched && stale) || !prev.sessionId;
+  const sessionId = newSession ? newSessionId() : (prev!.sessionId as string);
 
   /* 权威快照：/snapshot 不要求 over/won，进行中局可取（反作弊举报同通道）。
      失败不覆盖 pending——保留上一次成功快照，断线/首击前也不会丢。
@@ -346,7 +401,7 @@ export async function heartbeat(uid: number, gameId: string, level: VideoLevel, 
       ? await compEndOf(compIdN)
       : undefined;
   atomicWrite(stateFile(uid), JSON.stringify({
-    gameId, lastAt: Date.now(), level, allow,
+    gameId, lastAt: Date.now(), level, allow, sessionId,
     won: snapWon, progress: snapProgress, scoreMs: snapScoreMs,
     /* 比赛字段（20:30 张老师定）：非比赛局心跳不带 compId → 不写（state 清空）；
        compName 查库失败时只存 id（观众端降级显示「正在比赛」无链接）；
@@ -392,6 +447,10 @@ function seal(uid: number, gameId: string): boolean {
     const won = stNow && stNow.gameId === gameId ? stNow.won === true : false;
     /* scoreMs（19:31 张老师定）：state 记的当前局时长——服务端选局用 */
     const scoreMs = stNow && stNow.gameId === gameId ? stNow.scoreMs ?? 0 : 0;
+    /* sessionId（2026-11-28 张老师定）：同样只在 state 还是本局时采信——换局
+     * 封口时 heartbeat 尚未覆盖 state（旧局归上一场）；超时封口 sealIfStale
+     * 时 state 亦未动。state 已不是本局（极端并发）则不带＝永不匹配、不下发 */
+    const sessionId = stNow && stNow.gameId === gameId ? stNow.sessionId : undefined;
     idx.reps.push({
       gameId,
       level,
@@ -401,6 +460,7 @@ function seal(uid: number, gameId: string): boolean {
       scoreMs,
       won,
       at: Date.now(),
+      ...(sessionId ? { sessionId } : {}),
     });
   } catch {
     return false;
@@ -410,8 +470,8 @@ function seal(uid: number, gameId: string): boolean {
   return true;
 }
 
-/** 观众轮询时兜底封口超时局（主播关页/断线、没人发 final 的场景）。
- * 2026-11-27 张老师定：主播关掉「允许旁观」时**不摘 state**——allow=false
+/** 观众轮询时兜底封口超时局（玩家关页/断线、没人发 final 的场景）。
+ * 2026-11-27 张老师定：玩家关掉「允许旁观」时**不摘 state**——allow=false
  * 留在 state 里，feed 据此区分「主动关闭旁观」与「超时离线」两种停止态。 */
 export function sealIfStale(uid: number): boolean {
   const s = getState(uid);
@@ -434,13 +494,13 @@ function prune(uid: number, idx: LiveRepIndex) {
   }
 }
 
-/** 已封口 rep 的下发 URL——走 /api/live/rep 鉴权路由（2026-11-27 15:30 安全
+/** 已封口 rep 的下发 URL——走 /api/watch/rep 鉴权路由（2026-11-27 15:30 安全
  *  收口：不再给 public 静态路径，pending/reps 均不对未登录暴露） */
 export function repUrl(uid: number, gameId: string): string {
-  return isSafeGameId(gameId) ? `/api/live/rep?uid=${uid}&gameId=${gameId}` : "";
+  return isSafeGameId(gameId) ? `/api/watch/rep?uid=${uid}&gameId=${gameId}` : "";
 }
 
-/** 观看端读取已封口 rep（/api/live/rep 路由调用）。gameId 硬校验（路径穿越
+/** 观看端读取已封口 rep（/api/watch/rep 路由调用）。gameId 硬校验（路径穿越
  *  防护）；**只读 reps/**——pending 是进行中局快照、含完整雷位，绝不下发 */
 export function readSealedRep(uid: number, gameId: string): Uint8Array | null {
   if (!isSafeGameId(gameId)) return null;
@@ -451,9 +511,9 @@ export function readSealedRep(uid: number, gameId: string): Uint8Array | null {
   }
 }
 
-/** 正在直播的主播摘要（2026-11-27 张老师需求：粉丝端「XXX正在练习」通知）。
+/** 正在练习（可被旁观）的玩家摘要（2026-11-27 张老师需求：粉丝端「XXX正在练习」通知）。
  *  判定＝state 心跳新鲜 + allow!==false + **已有至少一条已封口 rep**（玩完
- *  一盘才通知，含踩雷局——封口即算）。全表扫 state.json（主播数有限，
+ *  一盘才通知，含踩雷局——封口即算）。全表扫 state.json（玩家数有限，
  *  每个一次 readJson，量级 <100） */
 export interface LiveStreamer {
   uid: number;
@@ -464,7 +524,7 @@ export interface LiveStreamer {
 export function liveStreamers(): LiveStreamer[] {
   /* 短 TTL 缓存（2026-11-27 15:30 性能收口）：notify 路由是全站登录用户
      60s 轮询的热路径，原实现每次 readdirSync+逐 uid readJson（同步 IO）——
-     在线用户一多就是每分钟上百次全量扫盘。3s 缓存对「刚开播延迟通知」
+     在线用户一多就是每分钟上百次全量扫盘。3s 缓存对「刚开始练习延迟通知」
      无感知（气泡本身 60s 轮询）。缓存同样挂 globalThis（跨 bundle 单例） */
   type LSCache = { __liveStreamersCache?: { at: number; data: LiveStreamer[] } };
   const g = globalThis as typeof globalThis & LSCache;

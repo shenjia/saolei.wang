@@ -102,7 +102,7 @@ function writeSndPref(v: boolean) {
 }
 let replaySndOn = readSndPref();
 let sndPopIdx = 0;
-/* 伪直播观看页（2026-11-27）的独立声音开关：观看页设置与录像页的
+/* 旁观观看页（2026-11-27）的独立声音开关：观看页设置与录像页的
    video_replay_snd 各存各的（默认继承练习页 sndFb），引擎读同一模块单例
    replaySndOn——进观看页时把独立值写入单例（离场随组件卸载即止，
    不回写 video_replay_snd），出声口径与本页开关即时一致 */
@@ -266,7 +266,7 @@ export interface ReplayStats {
   /** ZiNi 下界（2026-11-14 张老师需求：数据面板 Ops 行上方）——引擎初始化时
    *  由 calZini 按雷位现算一次，盘面属性与回放进度无关 */
   zini: number;
-  /** 胜局（2026-11-27 伪直播观看页消费）：引擎重放终态——全部非雷格开出
+  /** 胜局（2026-11-27 旁观观看页消费）：引擎重放终态——全部非雷格开出
    *  即胜（EVF 头部 won 恒 false 导出时，观看页以此为准判「完成/未完成」） */
   won: boolean;
 }
@@ -365,7 +365,7 @@ function solvedScan(
 interface Engine {
   restart: () => void;
   /** 停止回放。keepFinal＝true 时**不恢复静态封面**——定格当前终局盘面
-   *  （2026-11-27 伪直播观看页：踩雷局保留已标旗+bmb 炸雷标记、胜局保留
+   *  （2026-11-27 旁观观看页：踩雷局保留已标旗+bmb 炸雷标记、胜局保留
    *  自动补旗，与练习页终局观感一致；详情页退出回放仍走默认恢复封面） */
   stop: (keepFinal?: boolean) => void;
   /** 暂停（定格当前盘面与统计） */
@@ -377,8 +377,8 @@ interface Engine {
   /** 播放倍速（2026-11-05 张老师需求）：0.01–16 即时生效；回放时钟仍是权威时间域，
    *  只是 dt 按倍速缩放——事件应用/插值/统计口径全部不变 */
   setSpeed: (v: number) => void;
-  /** 当前播放时刻距最近已应用事件的间隔（百分秒）——伪直播观看页「主播 AFK」
-   *  判定（2026-11-27 21:03 张老师定）：主播开局后中途离开，录像又长又没操作；
+  /** 当前播放时刻距最近已应用事件的间隔（百分秒）——旁观观看页「玩家 AFK」
+   *  判定（2026-11-27 21:03 张老师定）：玩家开局后中途离开，录像又长又没操作；
    *  播放中该值持续增长，≥500（5 秒无任何事件）且有新局时直接切局 */
   idleCsec: () => number;
 }
@@ -970,13 +970,13 @@ export function runReplay(opts: {
       cp: crossings,
       flags: playerFlags,
       zini: ziniVal,
-      won, /* 引擎终态（2026-11-27 伪直播观看页消费：真胜局判定——EVF 头部
+      won, /* 引擎终态（2026-11-27 旁观观看页消费：真胜局判定——EVF 头部
               won 恒 false 导出（观看用途），观看页结算标题/评级口径以引擎
               重放判定为准，不得用 flags 推断） */
     };
   }
   /* rAF 驱动（九期起支持暂停/继续/拖拽；统计按 ~100ms 节流回传）。
-     2026-11-27 直播旁观卡顿案（张老师）：后台标签页 rAF 被浏览器**完全
+     2026-11-27 旁观卡顿案（张老师）：后台标签页 rAF 被浏览器**完全
      暂停**（录像+时间全停）；前台主线程偶发阻塞时 dt 累积、恢复后时间
      瞬跳而画面没动——混合时钟：可见走 rAF（60fps 顺滑光标），隐藏切
      setInterval 兜底驱动（后台节流至 ≥1s 仍持续走表，dt 由 performance.now
@@ -1029,7 +1029,7 @@ export function runReplay(opts: {
       cancelGlide(); // 播放接管光标：滑行动画立即让位（tick 每帧 interpCursor）
       if (curCsec >= data.totalCsec) resetReplay();
       lastFrame = 0;
-      /* 起播选驱动：隐藏态（旁观页后台挂着等开播）直接 interval——
+      /* 起播选驱动：隐藏态（旁观页后台挂着等新局开始）直接 interval——
          rAF 起了也永远不回调，播放会凭空卡死 */
       if (document.hidden) startBgTimer();
       else rafId = requestAnimationFrame(tick);
@@ -1267,7 +1267,7 @@ export function runReplay(opts: {
       }
       /* 静态地图恢复：saved 类名回写 + 清内嵌 SVG（旧位图棋盘红雷残留）+
          覆盖层按初始 board 串恢复贴图（雷=b 未开面，与 Board 静态直出一致）。
-         keepFinal＝跳过恢复（伪直播观看页终局定格：旗/炸雷标记/胜局补旗保留） */
+         keepFinal＝跳过恢复（旁观观看页终局定格：旗/炸雷标记/胜局补旗保留） */
       if (keepFinal) return;
       for (let i = 0; i < N; i++) {
         const td = cellTd(i);

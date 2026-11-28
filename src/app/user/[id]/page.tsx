@@ -286,7 +286,7 @@ export default async function UserViewPage({
     session && !isSelf ? isFollowing(session.uid, userId) : Promise.resolve(false),
   ]);
 
-  // 伪直播入口（2026-11-27 上线）：主播正在排行局中且访客是粉丝（或主播本人）
+  // 旁观入口（2026-11-27 上线）：玩家正在排行局中且访客是粉丝（或玩家本人）
   // 时显示。服务端 rep 拉取另有粉丝闸，这里只控入口。LIVE_ENABLED=0 可紧急关闭。
   const liveVisible = process.env.LIVE_ENABLED !== "0"
     && isLiveNow(userId) && (isSelf || viewerFollowing);
@@ -362,7 +362,7 @@ export default async function UserViewPage({
               别人的主页保持原样（裸 <img>，无链接无蒙层），不改动既有 DOM 与样式。 */}
           {isSelf ? (
             /* avatar_anchor：给 SelfAvatar（内部 button 不可嵌交互元素）套
-               relative 容器，供直播徽标骑线定位（2026-11-27 15:22 张老师定） */
+               relative 容器，供在线徽标骑线定位（2026-11-27 15:22 张老师定） */
             <span className="avatar_anchor">
               <SelfAvatar
                 src={photo}
@@ -374,10 +374,10 @@ export default async function UserViewPage({
                 //   与 account/profile 的 isDefaultAvatar 门控同语义。
                 defaultSex={photo === DEFAULT_AVATAR ? user.sex : undefined}
               />
-              {/* 直播标记（2026-11-27 15:04 张老师定；15:22 定骑线）：头像左上角
+              {/* 在线标记（2026-11-27 15:04 张老师定；15:22 定骑线）：头像左上角
                   骑线徽标（absolute 挂头像容器）；文案「在线练习中」/「，x人旁观」 */}
               {liveVisible && (
-                <Link href={`/live/${userId}`} className="user_live_badge" prefetch={false}>
+                <Link href={`/watch/${userId}`} className="user_live_badge" prefetch={false}>
                   <span className="user_live_dot" aria-hidden="true" />
                   {liveInComp ? "在线比赛中" : "在线练习中"}{liveViewers > 0 ? `，${liveViewers}人旁观` : ""}
                 </Link>
@@ -387,7 +387,7 @@ export default async function UserViewPage({
             <span className="fol_wrap">
               {photoImg}
               {liveVisible && (
-                <Link href={`/live/${userId}`} className="user_live_badge" prefetch={false}>
+                <Link href={`/watch/${userId}`} className="user_live_badge" prefetch={false}>
                   <span className="user_live_dot" aria-hidden="true" />
                   {liveInComp ? "在线比赛中" : "在线练习中"}{liveViewers > 0 ? `，${liveViewers}人旁观` : ""}
                 </Link>

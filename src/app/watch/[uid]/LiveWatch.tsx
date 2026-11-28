@@ -1,10 +1,10 @@
 "use client";
 
-// 伪直播播放器（2026-11-27 张老师需求，四版终稿）：版式与练习页 /online 完全同款。
+// 旁观播放器（2026-11-27 张老师需求，四版终稿）：版式与练习页 /online 完全同款。
 //
 // 标题行：板块内只放「旁观」（黄 h1）；紧靠标题放「YYY正在练习」——YYY=玩家
 // 头像、中文名、性别标记、军衔徽章+称号（正确配色、无边框），筛选器字号 15px；
-// 直播红点动态图标紧靠「正在练习」右侧；右上设置/全屏两颗 gicon 永远右对齐
+// 状态点动态图标紧靠「正在练习」右侧；右上设置/全屏两颗 gicon 永远右对齐
 // （margin-left:auto）。页面标题（浏览器标签页）＝「旁观XXX的练习」。
 //
 // 播放语义：每局只播一次（playedSet）。一局播完进 ended：
@@ -14,7 +14,7 @@
 // · 结算面板唯一按钮「下一局」：队列有未看录像＝金色可点（亮起时开始
 //   倒计时）；倒计时内嵌按钮文本「下一局(3)」——统一 N=3 秒（21:44 张老师定，
 //   原「短踩雷局<15% 3 秒、其余 5 秒」两档收并）；hover 后倒计时停止并从文本
-//   消失，只能手动点击。ended 态下主播新完一局＝按钮再亮再计时。
+//   消失，只能手动点击。ended 态下玩家新完一局＝按钮再亮再计时。
 // · 播完定格终局（14:23/14:24 张老师定）：踩雷局保留已标旗+炸雷 bmb、
 //   胜局保留自动补旗（引擎 stop(keepFinal)），与练习页终局一致。
 // · 多条待看录像：跳到时长最长的一条，中间跳过的不播。
@@ -58,7 +58,7 @@ interface FeedRep {
   level: VideoLevel;
   w: number;
   h: number;
-  /** 主播该局是否完成（2026-11-27 18:54 张老师定：选局优先已完成，失败尝试跳过） */
+  /** 玩家该局是否完成（2026-11-27 18:54 张老师定：选局优先已完成，失败尝试跳过） */
   won?: boolean;
   url: string;
   at: number;
@@ -66,7 +66,7 @@ interface FeedRep {
 
 type Phase = "loading" | "playing" | "waiting" | "ended";
 
-/** 主播身份（SSR 传入：头像/中文名/性别/称号） */
+/** 玩家身份（SSR 传入：头像/中文名/性别/称号） */
 export interface LiveHost {
   name: string;
   pinyin: string;
@@ -249,18 +249,18 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
   const [live, setLive] = useState(initiallyLive);
   /* 旁观数（2026-11-27 14:18 张老师需求）：红点后「x人正在旁观」 */
   const [viewerCount, setViewerCount] = useState(0);
-  /* 主播当前局完成百分比（2026-11-27 19:21 张老师定）：已开安全格占比，
-     feed 直播中带回——「对局中」气泡/按钮显示；停止/离线为 null */
+  /* 玩家当前局完成百分比（2026-11-27 19:21 张老师定）：已开安全格占比，
+     feed 练习中带回——「对局中」气泡/按钮显示；停止/离线为 null */
   const [progress, setProgress] = useState<number | null>(null);
-  /* 主播当前局 gameId（2026-11-27 22:29 张老师定）：与观众最近看完的录像
-     gameId 对比——相同＝主播还停在上一局结算画面未开新局（「等待玩家开始」，
-     不显示旧局进度残留）；不同＝主播已开新局还在局中（「对局中」+进度） */
+  /* 玩家当前局 gameId（2026-11-27 22:29 张老师定）：与观众最近看完的录像
+     gameId 对比——相同＝玩家还停在上一局结算画面未开新局（「等待玩家开始」，
+     不显示旧局进度残留）；不同＝玩家已开新局还在局中（「对局中」+进度） */
   const [curGameId, setCurGameId] = useState<string | null>(null);
   const [lastPlayedId, setLastPlayedId] = useState<string | null>(null);
   /* 录像放完时刻（22:29 张老师定倒计时规则）：ended 后 ≤3s 内候选到达
      才出倒计时，>3s 直接连播不出倒计时 */
   const endedAtRef = useRef<number | null>(null);
-  /* 比赛模式（2026-11-27 20:30 张老师定）：直播中主播在比赛——标题行
+  /* 比赛模式（2026-11-27 20:30 张老师定）：练习中玩家在比赛——标题行
      「正在练习」换「正在参加{全名}（剩余…）」（新标签详情页链接）；
      离线/非比赛 null */
   const [comp, setComp] = useState<{ id: number; name: string; end?: number } | null>(initialComp);
@@ -274,15 +274,15 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
     const t = window.setInterval(upd, 30_000);
     return () => window.clearInterval(t);
   }, []);
-  /* 主播离开（2026-11-27 张老师 13:01 定）：不再用红气泡——直接切换到
+  /* 玩家离开（2026-11-27 张老师 13:01 定）：不再用红气泡——直接切换到
      「XXX没有在练习」引导页形态（与未关注引导页同版式） */
   const [stopped, setStopped] = useState(false);
-  /* 中途被拒（2026-11-27 20:23 张老师定）：观看中主播把我拉黑/取关 → feed 403
+  /* 中途被拒（2026-11-27 20:23 张老师定）：观看中玩家把我拉黑/取关 → feed 403
      ＝终态拒绝，整页切「由于该玩家的隐私设置，你无法旁观」（与 SSR 入口面板
      同文案）；轮询照跑——解除拉黑/重新关注后 200 自动恢复观看 */
   const [denied, setDenied] = useState<string | null>(null);
   /* stopped 的 ref 镜像：轮询回调里判「已停止」（避免依赖数组加 stopped
-     导致轮询 effect 重建）；主播恢复直播时复位（15:11 张老师定） */
+     导致轮询 effect 重建）；玩家恢复旁观时复位（15:11 张老师定） */
   const stoppedRef = useRef(false);
   /* 服务端选定的下一条待播录像（2026-11-27 19:31 张老师定：feed 只回一条
      决策结果，不再下发全量队列）；null＝没有该看的（对局中/未开始） */
@@ -317,7 +317,7 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
   const cursorRef = useRef<HTMLElement | null>(null);
   /* playNext 重入闸（loading 阶段 engineRef 还是 null） */
   const playBusyRef = useRef(false);
-  /* 当前正在播放的局（2026-11-27 21:03 张老师定：主播 AFK 切局判定用——
+  /* 当前正在播放的局（2026-11-27 21:03 张老师定：玩家 AFK 切局判定用——
      播放中该局未标已播，服务端「时长最长」选局仍会推它当 best，新局只在
      skipped 里出现；playNext 起播时记录，onEnd/中断后失效） */
   const playingGameIdRef = useRef<string | null>(null);
@@ -360,7 +360,7 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
     /* keepFinal（2026-11-27 14:23 张老师定）：定格终局盘面——踩雷局保留
        已标旗+炸雷 bmb 标记、胜局保留自动补旗，与练习页终局一致（旧 stop
        恢复静态封面＝「重置」观感）。下一局起播由引擎 resetReplay 全清。
-       keepFinal=false（主播停止切引导页时）：完整重置——返回后空白地图 */
+       keepFinal=false（玩家停止切引导页时）：完整重置——返回后空白地图 */
     engineRef.current?.stop(keepFinal);
     engineRef.current = null;
     cursorRef.current?.remove();
@@ -383,7 +383,7 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
-  /* 观看收尾（主播离开 stopped / 中途被拒 denied 两路共用）：遮罩面板搬回
+  /* 观看收尾（玩家离开 stopped / 中途被拒 denied 两路共用）：遮罩面板搬回
      React 树再摘、退两种全屏、引擎硬重置、终局状态清空——2026-11-27 20:23
      从 stopped 分支抽出（中途被拉黑同样可能正在全屏观看/气泡常驻） */
   const teardownPlayback = useCallback(() => {
@@ -419,7 +419,7 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
         /* played（19:31 张老师定）：已看过的 gameId 上报给服务端选局——
            只回传最近 40 条（队列窗口 ≤20/24h，更旧的必然已过期） */
         const playedQs = encodeURIComponent([...playedRef.current].slice(-40).join(","));
-        const r = await fetch(`/api/live/feed?uid=${uid}&played=${playedQs}`, { cache: "no-store" });
+        const r = await fetch(`/api/watch/feed?uid=${uid}&played=${playedQs}`, { cache: "no-store" });
         if (!alive) return;
         if (!r.ok) {
           const j = await r.json().catch(() => null) as { error?: string } | null;
@@ -451,14 +451,14 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
         /* 旁观数（2026-11-27 14:18 张老师需求）：标题行「x人正在旁观」
            （数字亮灰、文字深灰）；feed 响应带回 */
         setViewerCount(typeof j.viewers === "number" ? j.viewers : 0);
-        /* 当前局完成百分比（19:21 张老师定）：直播中显示在气泡/按钮 */
+        /* 当前局完成百分比（19:21 张老师定）：练习中显示在气泡/按钮 */
         setProgress(typeof j.progress === "number" ? j.progress : null);
-        /* 主播当前局 gameId（22:29 张老师定）：判「等待玩家开始」vs「对局中」 */
+        /* 玩家当前局 gameId（22:29 张老师定）：判「等待玩家开始」vs「对局中」 */
         setCurGameId(typeof j.curGameId === "string" ? j.curGameId : null);
-        /* 比赛模式（20:30 张老师定）：直播中随心跳 state 刷新（进出比赛即时切换） */
+        /* 比赛模式（20:30 张老师定）：练习中随心跳 state 刷新（进出比赛即时切换） */
         setComp(j.comp && j.comp.name ? j.comp : null);
-        /* 主播 AFK 切局（2026-11-27 21:03 张老师定）：正在播的局鼠标累计
-           5 秒不动（主播开局后中途离开做其他事——录像又长又无操作），而
+        /* 玩家 AFK 切局（2026-11-27 21:03 张老师定）：正在播的局鼠标累计
+           5 秒不动（玩家开局后中途离开做其他事——录像又长又无操作），而
            feed 出现了新局 → 中断当前局直接等下一局（下轮 poll ≤3s 送达，
            waiting+候选自动起播）。新局识别：播放中该局未标已播，服务端
            「时长最长」选局仍会把它当 best 推回——新局要么顶替 best
@@ -483,15 +483,15 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
             playingGameIdRef.current = null;
           }
         }
-        /* 主播停止练习（2026-11-27 张老师定）：开过直播（曾 live）后转为不 live
-           ＝主播退出练习页或关闭允许旁观——直接切换到「XXX没有在练习」引导页。
+        /* 玩家停止练习（2026-11-27 张老师定）：开过旁观（曾 live）后转为不 live
+           ＝玩家退出练习页或关闭允许旁观——直接切换到「XXX没有在练习」引导页。
            切换前先把终局面板收干净（14:51 张老师定：遮罩面板一并消失）：
            遮罩形态下面板被 place() appendChild 挪进 body #gr_modal（React
            树外），分支切换卸载旧树时 React 挪走的节点删不掉会残留——
            先搬回 game_area（React 记录的父位）再摘遮罩，卸载即可正常回收。
            19:02 张老师定：**还有待播录像（服务端决策候选在）或引擎正在播时
-           不切 stopped**——主播玩完最后一局就走，观众要等最后一局放完再切
-           引导页，否则最后一局看不到；主播断线未发 final 的超时局由观众
+           不切 stopped**——玩家玩完最后一局就走，观众要等最后一局放完再切
+           引导页，否则最后一局看不到；玩家断线未发 final 的超时局由观众
            轮询 sealIfStale 兜底封口，≤12s 必进队列，不会永远卡住 */
         if (!j.live && liveOnceRef.current && !stoppedRef.current) {
           if (nextRepRef.current === null && engineRef.current === null) {
@@ -500,7 +500,7 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
             teardownPlayback();
           }
         }
-        /* 主播恢复直播（2026-11-27 15:11 张老师定）：stopped 不是终态——
+        /* 玩家恢复旁观（2026-11-27 15:11 张老师定）：stopped 不是终态——
            停止期间轮询照跑，live 一恢复马上撤引导页回到观看。18:39 定：
            恒回 waiting 空白地图（面板已在停止时清空），有未播局起播无则等新局 */
         if (j.live) {
@@ -534,7 +534,7 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
     }
     playBusyRef.current = true;
     const seq = ++fetchSeq.current;
-    /* 当前局登记（主播 AFK 切局判定用，见 playingGameIdRef 注释） */
+    /* 当前局登记（玩家 AFK 切局判定用，见 playingGameIdRef 注释） */
     playingGameIdRef.current = next.gameId;
     /* 选中局与跳过的中间局直接入 played（张老师口径：不再播放） */
     playedRef.current.add(next.gameId);
@@ -680,7 +680,7 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
   }, [level]);
 
   useEffect(() => {
-    /* deps 带 stopped（2026-11-27 18:39 张老师定）：主播停止→返回后观看树
+    /* deps 带 stopped（2026-11-27 18:39 张老师定）：玩家停止→返回后观看树
        整棵重建（gwrap 新元素），zoom/level 未变 effect 不会自己重跑——
        挂 stopped 变化强制重放记忆倍率，游戏区域保持此前比例不回默认 */
     if (gwrapRef.current) gwrapRef.current.style.zoom = String(zoom);
@@ -757,7 +757,7 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
       host.querySelector("#lv_grm_stats")?.appendChild(rep);
     };
     const place = () => {
-      /* 已脱离文档（主播停止切引导页——观看树被 React 替换，闭包里的
+      /* 已脱离文档（玩家停止切引导页——观看树被 React 替换，闭包里的
          ga/gr/rep/res 全成 detached 节点）时绝不再摆：否则 ESC 退出全屏
          触发 fullscreenchange → repl → place() 会把 detached 面板重新
          挂进新建的 #gr_modal，遮罩和结算面板「复活」在引导页上
@@ -1040,7 +1040,7 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
   /* 下一局亮起计时的辅助 ref（见下方 effect：hover 保持/新一轮判定） */
   const prevPendingRef = useRef(false);
   const hoverHoldRef = useRef(false);
-  /* ended 态下候选到达（2026-11-27 14:54 张老师报：主播打完新一局「下一局」
+  /* ended 态下候选到达（2026-11-27 14:54 张老师报：玩家打完新一局「下一局」
      亮起但没有倒计时）。口径：**按钮亮起即开始计时**——统一 N=3 秒
      （21:44 张老师定：原「短踩雷局<15% 3 秒、其余 5 秒」的两档收并，5 秒偏长）；
      hover 停过的同轮不复活，候选出现＝新一轮重启。候选可能晚于 onEnd 才到
@@ -1085,11 +1085,11 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
      事件流的场景恒判错（完成的局显示「未完成」+ 无评级根因） */
   const won = stats ? stats.won : false;
 
-  /* 「玩家正在对局中」绿色气泡（2026-11-27 18:39 张老师定）：主播在练但无
+  /* 「玩家正在对局中」绿色气泡（2026-11-27 18:39 张老师定）：玩家在练但无
      录像可播（空白地图等待态）时，屏幕正中弹全站通用 toast（loading 型＝
      绿底 + 文字后转圈）；带当前局完成百分比（19:21 张老师定）。toast 有
      8s 兜底自动渐隐，7.5s 续期重推保持常驻（重推时读 progressRef 最新值）；
-     起播/停止/主播离开等待态即收（cleanup toastLoadingDone） */
+     起播/停止/玩家离开等待态即收（cleanup toastLoadingDone） */
   const showInGameTip = !stopped && !denied && live && phase === "waiting";
   const progressRef = useRef<number | null>(null);
   useEffect(() => { progressRef.current = progress; }, [progress]);
@@ -1100,7 +1100,7 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
   useEffect(() => {
     if (!showInGameTip) return;
     const tip = () => {
-      /* 等待玩家开始（22:29 张老师定）：主播停在上一局结算画面未开新局时，
+      /* 等待玩家开始（22:29 张老师定）：玩家停在上一局结算画面未开新局时，
          气泡文案换掉且不显示旧局进度；已开新局（局中无录像可播）才报进度 */
       const waitingNew = curGameIdRef.current !== null && curGameIdRef.current !== lastPlayedIdRef.current;
       if (!waitingNew) return "等待玩家开始";
@@ -1114,14 +1114,14 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
 
   /* 「下一局」按钮三态（2026-11-27 18:39 定 / 19:06 修）：
      · ended + 有未播录像 → 「下一局」金色可点（亮起倒计时不变）
-     · 对局中（播放中，或 ended + 无未播 + 主播在练）→ 「对局中」金色降
+     · 对局中（播放中，或 ended + 无未播 + 玩家在练）→ 「对局中」金色降
        亮度 + 转圈禁用（播放中面板整体隐藏，按钮随面板不可见；ended 态可见）
-     · 主播未开局（ended + 无未播 + !live）→ 「未开始下一局」禁用 */
+     · 玩家未开局（ended + 无未播 + !live）→ 「未开始下一局」禁用 */
   const busy = phase === "playing" || phase === "loading";
   const canNext = phase === "ended" && hasPending;
   const onDuty = busy || (phase === "ended" && live && !hasPending);
-  /* 主播已开新局（22:29 张老师定）：curGameId≠最近看完的局＝新局在局中；
-     相同（或主播端无 state）＝主播停在上一局结算画面——按钮「等待玩家开始」、
+  /* 玩家已开新局（22:29 张老师定）：curGameId≠最近看完的局＝新局在局中；
+     相同（或玩家端无 state）＝玩家停在上一局结算画面——按钮「等待玩家开始」、
      不显示旧局进度残留（progress 是上一局的） */
   const newGameOn = curGameId !== null && curGameId !== lastPlayedId;
   const waitingStart = onDuty && !newGameOn;
@@ -1143,10 +1143,10 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
     );
   }
 
-  /* 主播离开（2026-11-27 13:01 张老师定）：曾直播后转为停止——整页切换到
+  /* 玩家离开（2026-11-27 13:01 张老师定）：曾旁观后转为停止——整页切换到
      「XXX没有在练习」引导页形态（与未关注引导页同版式：左上角「旁观」黄 h1、
      姓名可点进主页、军衔徽章+大字号正确配色、关注按钮（已关注态）+ 通知文案）。
-     15:11 张老师定：非终态——轮询照跑，主播恢复直播自动撤回观看页 */
+     15:11 张老师定：非终态——轮询照跑，玩家恢复旁观自动撤回观看页 */
   if (stopped) {
     const he = host.sex ? "他" : "她";
     return (
@@ -1178,10 +1178,13 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
     <div className="op_root live_watch" ref={rootRef}>
       <FlopSprites />
       {/* 标题行：「旁观」（黄 h1）+ 副标题「YYY正在练习」（头像/中文名/性别/
-          军衔徽章+称号）+ 直播红点紧靠「正在练习」右侧；右上 gicon 永远右对齐 */}
+          军衔徽章+称号）+ 状态点紧靠「正在练习」右侧；右上 gicon 永远右对齐 */}
       <div className="news_head live_head">
         <h1>旁观</h1>
         <div className="live_host">
+          {host.isDefault
+            ? <DefaultAvatar sex={host.sex} size="small" className="live_avatar" alt={host.name} />
+            : <img className="live_avatar" src={host.avatar} alt={host.name} />}
           <Link href={`/user/${uid}`} className="live_host_name" prefetch={false}>{host.name}</Link>
           {/* 英文名不再显示（2026-11-27 21:12 张老师定） */}
           <span className={`gender ${host.sex ? "male" : "female"}`} aria-label={host.sex ? "男" : "女" } />
@@ -1347,8 +1350,8 @@ export function LiveWatch({ uid, host, initiallyLive, metricDists, initialComp }
                     ——图标不占 flex 流宽，「对局中」文字与无图标时完全同位居中 */}
                 <span className="grb_txt">
                   {nextLabel}
-                  {/* 进度只随「主播已开新局」显示（22:29 张老师定）——waitingStart
-                      （主播停在上一局结算画面）时 progress 是旧局残留，不显示 */}
+                  {/* 进度只随「玩家已开新局」显示（22:29 张老师定）——waitingStart
+                      （玩家停在上一局结算画面）时 progress 是旧局残留，不显示 */}
                   {!canNext && onDuty && newGameOn && progress !== null ? `(${progress}%)` : ""}
                   {canNext && countdown !== null && countdown > 0 ? `(${countdown})` : ""}
                   {onDuty && <span className="grb_spin" aria-hidden="true" />}

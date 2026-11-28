@@ -1,5 +1,5 @@
 // 粉丝端「正在练习」通知数据（2026-11-27 张老师需求）：登录玩家轮询，返回
-// 我关注且正在直播（玩完至少一盘、含踩雷局）的主播摘要（姓名/性别/军衔/
+// 我关注且正在练习（可被旁观，玩完至少一盘、含踩雷局）的玩家摘要（姓名/性别/军衔/
 // 头像）——客户端右下角悬浮气泡消费。
 // 上线开关：默认开启；紧急关闭在服务器 .env 设 LIVE_ENABLED=0（2026-11-27 张老师确认上线）。
 
@@ -29,13 +29,13 @@ interface NotifyStreamer {
   sex: number;
   title: string;
   titleColor: string;
-  /** 头像 URL（登录主播一般有 player 墙图，此处复用 resolveAvatarUrl 口径
+  /** 头像 URL（登录玩家一般有 player 墙图，此处复用 resolveAvatarUrl 口径
    *  ——头像兜底交给客户端 DefaultAvatar） */
   avatar: string;
   isDefault: boolean;
   /** 当前旁观人数（2026-11-27 14:16 张老师需求：气泡下沿显示「x人正在旁观」） */
   viewers: number;
-  /** 比赛模式（2026-11-27 20:30 张老师定）：主播在比赛时真——气泡文案
+  /** 比赛模式（2026-11-27 20:30 张老师定）：玩家在比赛时真——气泡文案
    *  「正在练习」换「正在比赛」 */
   comp: boolean;
 }
@@ -46,7 +46,7 @@ export async function GET(req: Request) {
   if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 });
   const streamers = liveStreamers();
   if (!streamers.length) return NextResponse.json({ ok: true, streamers: [] });
-  /* 粉丝视角过滤：只看「我关注且非我」的主播 */
+  /* 粉丝视角过滤：只看「我关注且非我」的玩家 */
   const mySet = await followingSet(session.uid, streamers.map((s) => s.uid));
   const candidates = streamers.filter((s) => mySet.has(s.uid));
   if (!candidates.length) return NextResponse.json({ ok: true, streamers: [] });

@@ -1,21 +1,21 @@
 "use client";
 
 // 粉丝端「正在练习」通知气泡（2026-11-27 张老师需求；23:48 改版多条堆叠）：
-// 关注的主播开「允许旁观」并玩完一盘（含踩雷局）后，在线粉丝页面右下角弹出
+// 关注的玩家开「允许旁观」并玩完一盘（含踩雷局）后，在线粉丝页面右下角弹出
 // 悬浮小气泡「XXX正在练习」（姓名/性别/军衔正确渲染）；下沿深灰小字
 // 「点击去旁观」，点击在新标签页打开旁观界面。
 //
-// 去重（页面级·按直播场次，2026-11-27 13:50 张老师定）：
-// · 单一页面生命周期内，每个主播的**同一场直播**只弹一次；
-// · 主播停止（离线）后再开（下一场），会再次提醒（离开时清除该主播的
+// 去重（页面级·按旁观场次，2026-11-27 13:50 张老师定）：
+// · 单一页面生命周期内，每个玩家的**同一场练习**只弹一次；
+// · 玩家停止（离线）后再开（下一场），会再次提醒（离开时清除该玩家的
 //   「本场已弹」标记）；
 // · 点击去旁观≠永久屏蔽（旧 localStorage 永久口径已废）——点过的这场上
 //   不再弹，下一场照常提醒；
-// · 多主播同播：最多同时显示 3 条，每条都可独立点击；更多候选排队，
+// · 多玩家同播：最多同时显示 3 条，每条都可独立点击；更多候选排队，
 //   每 4 秒整体向上滚动一格，最上方条目继续上移并渐隐，新条目从底部进入。
 //
-// 轮询：60s /api/live/notify（登录粉丝视角）。观察流：每次轮询记录在线集合，
-// 离开的主播清「已弹」标记——再上线就是新一场。
+// 轮询：60s /api/watch/notify（登录粉丝视角）。观察流：每次轮询记录在线集合，
+// 离开的玩家清「已弹」标记——再上线就是新一场。
 // 气泡形态：右下 fixed 卡片堆，15s 自动淡出；悬停任一条时整堆暂停计时。
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -174,7 +174,7 @@ export function LiveNotifyHost() {
   /* 局中挂起时的观察器句柄（结算出现即清） */
   const playingWatchRef = useRef<number | null>(null);
   const closeTimersRef = useRef<Map<number, number>>(new Map());
-  /* 本页面周期内「这场直播已弹过」的主播集合；主播离线即摘除（再上线=新一场） */
+  /* 本页面周期内「这场练习已弹过」的玩家集合；玩家离线即摘除（再上线=新一场） */
   const notifiedRef = useRef<Set<number>>(new Set());
 
   const commitCards = useCallback((next: NotifyCard[]) => {
@@ -279,7 +279,7 @@ export function LiveNotifyHost() {
     const poll = async () => {
       const watchingUid = watchingUidNow();
       try {
-        const r = await fetch("/api/live/notify", { cache: "no-store" });
+        const r = await fetch("/api/watch/notify", { cache: "no-store" });
         if (!alive || !r.ok) return;
         const j = await r.json() as { ok: boolean; streamers: NotifyStreamer[] };
         if (!alive || !j.ok) return;
@@ -328,7 +328,7 @@ export function LiveNotifyHost() {
     return () => { window.removeEventListener("popstate", sweep); window.clearInterval(t); };
   }, [dismiss]);
 
-  /* 提示音预取；同一批多张只响一次，后续从队列补入的新主播再响。 */
+  /* 提示音预取；同一批多张只响一次，后续从队列补入的新玩家再响。 */
   useEffect(() => { sfxPrefetch([NOTIFY_SND]); }, []);
   const soundedRef = useRef<Set<number>>(new Set());
   useEffect(() => {
@@ -337,9 +337,9 @@ export function LiveNotifyHost() {
     soundedRef.current = current;
   }, [activeKey]);
 
-  /* 点击：新标签打开旁观；今日不再提醒：该主播 24h 内不再弹。 */
+  /* 点击：新标签打开旁观；今日不再提醒：该玩家 24h 内不再弹。 */
   const openWatch = useCallback((s: NotifyStreamer) => {
-    window.open(`/live/${s.uid}`, "_blank", "noopener");
+    window.open(`/watch/${s.uid}`, "_blank", "noopener");
     dismiss(s.uid);
   }, [dismiss]);
   const mute = useCallback((s: NotifyStreamer) => {

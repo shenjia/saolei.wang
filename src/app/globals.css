@@ -19159,10 +19159,10 @@ body #header .nav li a.vs_new_hint,
   text-decoration: underline;
 }
 
-/* ===== 伪直播观看页（2026-11-27 新功能，dev 预览；同日三版）=====
+/* ===== 旁观观看页（2026-11-27 新功能，dev 预览；同日三版）=====
    版式与练习页 /online 完全同款：#page.main > .box 深底圆角卡、
    .news_head 黄 h1 标题「旁观」+ 副标题「YYY正在练习」（头像/中文名/
-   性别/称号，筛选器字号）+ 横线装饰（筛选器同款）+ 直播红点动态图标、
+   性别/称号，筛选器字号）+ 横线装饰（筛选器同款）+ 状态点动态图标、
    右上 .gicons 只留设置齿轮+全屏两颗 gicon（复用 #online_play 现成规则）、
    .gwrap 银灰游戏窗（计数条 LED 雷数/笑脸/LED 计时 + gframe 棋盘）。
    游戏窗规则自 #online_play 同名一组 1:1 移植（.vprfs 全屏层同款先例）——
@@ -19290,10 +19290,10 @@ body #header .nav li a.vs_new_hint,
 .live_watch .live_game .replay_cursor {
   z-index: 4;
 }
-/* 直播状态行已撤（2026-11-27 15:15 张老师定：底部「画面同步中…」文案位置去掉） */
+/* 「画面同步中」状态行已撤（2026-11-27 15:15 张老师定：底部「画面同步中…」文案位置去掉） */
 /* ---- 四版（2026-11-27 张老师定）：标题行「旁观」+ 副标题 ---- */
 /* 副标题行：YYY正在练习（头像/中文名/拼音/性别/军衔徽章+称号），筛选器字号 15px。
-   军衔徽章与称号文字同色无边框；直播红点紧靠「正在练习」右侧 */
+   军衔徽章与称号文字同色无边框；状态点紧靠「正在练习」右侧 */
 .live_watch .live_host {
   display: flex;
   align-items: center;
@@ -19331,7 +19331,7 @@ body #header .nav li a.vs_new_hint,
   color: #b1b1a4; /* 亮灰（2026-11-27 20:54 张老师定：近白太亮，降灰） */
   font-weight: bold;
   text-decoration: none;
-  /* 主播名字号 24px（2026-11-28 01:06 张老师定）：原继承 .live_host 的 15px。
+  /* 玩家名字号 24px（2026-11-28 01:06 张老师定）：原继承 .live_host 的 15px。
      行高收到 30px——头像 26px，行内各元素 align-items:center 垂直居中，
      副标题行整体仍相对 39px 的「旁观」h1 居中 */
   font-size: 24px;
@@ -19402,7 +19402,7 @@ body #header .nav li a.vs_new_hint,
   text-align: right;
 }
 /* ---- 未关注引导态（2026-11-27 张老师定）：「XXX没有在练习」+ 关注按钮 ----
-   主播离开（stopped）整页切换也用本版式（LiveWatch 内联渲染，box id 仍
+   玩家离开（stopped）整页切换也用本版式（LiveWatch 内联渲染，box id 仍
    #online_play——本组规则原样生效）。
    13:48 张老师定：去掉「旁观」标题——只留副标题行 + 按钮/文案（上下留白保留
    防扁平）。⚠️ padding 压过 body #page .box 的 16px 14px（2 特异性） */
@@ -19483,7 +19483,7 @@ body #header .nav li a.vs_new_hint,
 /* 网页全屏：直接复用练习页 op-webfs 全套基建（#online_play > div.op-webfs
    fixed 铺满 + html.op-webfs 隐藏站头页脚，见 10546 起规则段，此处零新增）。 */
 
-/* 用户主页直播标记（2026-11-27 dev 预览；15:04 张老师定改版；15:22 定骑线）：
+/* 用户主页在线标记（2026-11-27 dev 预览；15:04 张老师定改版；15:22 定骑线）：
    骑在头像左上角边线上——徽标高 20px（padding 2×2 + 行高 16），上面一半
    高度（10px）露在头像顶边外，左侧同样 10px 在头像左边外。锚点是头像
    容器（fol_wrap / avatar_anchor，均 relative），文案「在线练习中」/
@@ -19860,14 +19860,14 @@ body #header .nav li a.vs_new_hint,
   line-height: 18px;
   white-space: nowrap;
 }
-/* 观看页徽标（.live_watchers_badge，LiveWatch JSX）：观众没有主播的旁观
+/* 观看页徽标（.live_watchers_badge，LiveWatch JSX）：观众没有被旁观玩家的旁观
    开关——不出 hover 提醒气泡、不挡其下元素点击。
    位置（2026-11-27 23:38 张老师定）：在标题行内、紧跟「正在练习/正在参加
    XXX」之后——流内 inline-flex，**不**走基础规则的 absolute 右下角悬浮
    （旁观页结算面板浮在主板块右下，悬浮会被面板盖住）。
    ⚠️ 特定性：本规则 (1,4,0) 压过基础悬浮规则 (1,1,0)；下方全屏 fixed 规则
    用 :not(.live_watchers_badge) 直接排除观看页徽标，两者不竞争——观看页徽标
-   永远留流内，不随全屏飘到屏幕右下。字号 13px 比主播界面略小一档，
+   永远留流内，不随全屏飘到屏幕右下。字号 13px 比被旁观玩家界面略小一档，
    与 15px 标题行文字协调 */
 #online_play .live_viewers_badge.live_watchers_badge {
   pointer-events: none;
@@ -19880,7 +19880,7 @@ body #header .nav li a.vs_new_hint,
   line-height: 16px;
 }
 /* 全屏态：屏幕右下角（fixed 在 fullscreen 子树内仍相对视口）——
-   仅主播练习页徽标（absolute 悬浮于 .op_root）；观看页徽标在标题行流内，
+   仅被旁观玩家练习页徽标（absolute 悬浮于 .op_root）；观看页徽标在标题行流内，
    由上方 (2,4,0) 规则覆盖为 static，不受本条影响 */
 html.op-webfs #online_play .op_root .live_viewers_badge:not(.live_watchers_badge),
 html.op-fakefs #online_play .op_root .live_viewers_badge:not(.live_watchers_badge),

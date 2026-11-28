@@ -1,6 +1,6 @@
-// 主播查看当前旁观者名单（2026-11-28 张老师需求）：练习页「N人正在旁观」
+// 玩家查看当前旁观者名单（2026-11-28 张老师需求）：练习页「N人正在旁观」
 // hover 气泡使用。只允许读取自己的名单，不接受 uid 参数，避免旁路探测他人在看谁。
-// 上线开关与其他 /api/live/* 一致：服务器 .env 设 LIVE_ENABLED=0 即关闭。
+// 上线开关与其他 /api/watch/* 一致：服务器 .env 设 LIVE_ENABLED=0 即关闭。
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
