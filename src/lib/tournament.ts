@@ -2274,82 +2274,46 @@ function finisherUidsOf(conf: ParsedScoreConfig, scores: Map<number, PlayerScore
 /** 后台比赛清单批量完赛统计（2026-11-22 张老师需求）：返回 Map<compId, 完赛 uid 列表>。
  *  与 getTourDetailStats.finishers 同口径（finisherUidsOf）；一次取齐比赛/录像/
  *  会话/明细四表后按比赛分组算分，当前页 10 场共 5 个查询，不逐场 N×5。 */
-export async function getTourFinishersBulk(
-  compIds: number[]
-): Promise<Map<number, number[]>> {
+// 60s 缓存（2026-11-28 全站 502 事故收尾）：完赛名单随录像挂接/审核变化，60s 内可见够用。
+// 原实现无缓存且与旧 getTourMyStats 同款写法（4232490 同一提交）：`tournamentId IN (多场)`
+// 拉全部录像 + 对全部 id 做巨型 IN 回查——首屏 5 场一次拉 3.5 万盘、全表扫，生产实测
+// 恒 3.0s，是 /tournaments 列表页除 getTourGlobalStats 外的第二个 3s 底噪。
+const fetchTourFinishersBulkCached = async (compIds: number[]): Promise<Map<number, number[]>> => {
+  // unstable_cache 的返回值必须可 JSON 序列化：Map 不行（出缓存变 {}，.get 不是函数 → 500，
+  // 2026-11-28 dev 实证）——缓存层存 [cid, uids[]][]，出缓存再还原 Map。
+  const key = [...new Set(compIds)].sort((x, y) => x - y).join(",");
+  const cached = unstable_cache(
+    async (k: string) => {
+      const m = await getTourFinishersBulkImpl(k.split(",").map(Number));
+      return [...m.entries()].map(([cid, uids]) => [cid, uids] as [number, number[]]);
+    },
+    ["tour-finishers-v1", key],
+    { revalidate: 60 }
+  );
+  const rows = await cached(key);
+  return new Map(rows.map(([cid, uids]) => [cid, uids] as [number, number[]]));
+};
+export async function getTourFinishersBulk(compIds: number[]): Promise<Map<number, number[]>> {
+  return fetchTourFinishersBulkCached(compIds);
+}
+/** 完赛者名单（口径不变）：逐场走 loadTourScoreInput（FORCE INDEX + 分块 IN，判窗与
+ *  getTourRanking 同源）→ computePlayerScores → finisherUidsOf。不再有多值 IN / 巨型 IN。 */
+async function getTourFinishersBulkImpl(compIds: number[]): Promise<Map<number, number[]>> {
   const out = new Map<number, number[]>();
-  if (compIds.length === 0) return out;
-  const bigIds = [...new Set(compIds)].map((n) => BigInt(n));
-  const [comps, vids, sessions] = await Promise.all([
-    prisma.tournament.findMany({
-      where: { id: { in: bigIds } },
-      select: { id: true, scoreMode: true, scoreConfig: true, includeLevels: true, windowHours: true },
-    }),
-    prisma.video.findMany({
-      where: { tournamentId: { in: bigIds }, status: { not: 0 } },
-      select: { id: true, tournamentId: true, user: true, level: true, createTime: true },
-    }),
-    prisma.tournamentWindowSession.findMany({
-      where: { tournamentId: { in: bigIds } },
-      select: { tournamentId: true, userId: true, startTime: true, endTime: true },
-    }),
-  ]);
-  const infos = await prisma.videoInfo.findMany({
-    where: { id: { in: vids.map((v) => v.id) } },
-    select: { id: true, realTime: true, board3bv: true, noRecord: true },
-  });
-  const infoMap = new Map(infos.map((i) => [i.id, i]));
-  const metrics = vids.length
-    ? await prisma.videoMetrics.findMany({
-        where: { id: { in: vids.map((v) => v.id) } },
-        select: { id: true, bvs: true, ioe: true, thrp: true, cp: true },
-      })
-    : [];
-  const metricMap = new Map(metrics.map((m) => [m.id, m]));
-  for (const comp of comps) {
-    const conf = parseScoreConfig(comp.scoreMode, comp.scoreConfig);
-    if (!conf) {
-      out.set(Number(comp.id), []);
+  for (const cid of [...new Set(compIds)]) {
+    const input = await loadTourScoreInput(BigInt(cid));
+    if (!input) {
+      out.set(cid, []);
       continue;
     }
-    // 时间过滤判据与 getTourRanking 同源：集体赛不过滤；窗口赛有会话记录时按各玩家会话窗
-    const compSess = sessions.filter((s) => String(s.tournamentId) === String(comp.id));
-    const useSess = !!comp.windowHours && compSess.length > 0;
-    const sessBy = new Map(compSess.map((s) => [Number(s.userId), s]));
-    const inWin = useSess
-      ? vids.filter((r) => {
-          if (String(r.tournamentId) !== String(comp.id)) return false;
-          const s = sessBy.get(Number(r.user));
-          const t = Number(r.createTime);
-          return !!s && t >= Number(s.startTime) && t <= Number(s.endTime);
-        })
-      : vids.filter((r) => String(r.tournamentId) === String(comp.id));
-    const valueOf = (vid: bigint): number => {
-      if (conf.metric === "time") {
-        const info = infoMap.get(vid);
-        return info && !info.noRecord ? info.realTime : 0;
-      }
-      if (conf.metric === "3bv") {
-        const info = infoMap.get(vid);
-        return info && !info.noRecord ? info.board3bv * 1000 : 0;
-      }
-      const m = metricMap.get(vid);
-      if (!m) return 0;
-      const raw = conf.metric === "3bvs" ? m.bvs : conf.metric === "ioe" ? m.ioe : conf.metric === "thrp" ? m.thrp : m.cp;
-      return raw > 0 ? raw * 1000 : 0;
-    };
-    const scores = computePlayerScores(
-      comp.scoreMode,
-      comp.scoreConfig,
-      inWin.map((r) => ({
-        user: r.user,
-        level: r.level,
-        value: valueOf(r.id),
-        noRecord: infoMap.get(r.id)?.noRecord ?? false,
-      })),
-      (comp.includeLevels ?? "beg,int,exp").split(",").map((s) => s.trim()).filter(Boolean),
-    );
-    out.set(Number(comp.id), finisherUidsOf(conf, scores));
+    const conf = parseScoreConfig(input.comp.scoreMode, input.comp.scoreConfig);
+    if (!conf) {
+      out.set(cid, []);
+      continue;
+    }
+    const includeLv = input.comp.includeLevels.split(",").map((x) => x.trim()).filter(Boolean);
+    const scores = computePlayerScores(input.comp.scoreMode, input.comp.scoreConfig, input.tourVids, includeLv);
+    out.set(cid, finisherUidsOf(conf, scores));
   }
   return out;
 }
