@@ -379,7 +379,19 @@ export interface TourGlobalStats {
   prizeTotal: number; // 累计奖金（全站总奖金之和）
 }
 
+// 60s 缓存（2026-11-28 全站 502 事故收尾）：全站统计一天变不了几次，原实现每请求实时算——
+// 其中「参赛人数」`video.findMany({ tournamentId: { not: null } })` 在 4.4 万行挂接录像上
+// IS NOT NULL 全表扫，生产实测恒 3.4s，是 /tournaments 列表页恒定 3s+ 的底噪（此前被
+// getTourMyStats 的 10-37s 盖住，后者修掉后才露出）。今日增量（绿括号）60s 内可见够用。
+const fetchTourGlobalStatsCached = unstable_cache(
+  async () => getTourGlobalStatsImpl(),
+  ["tour-global-stats-v1"],
+  { revalidate: 60 }
+);
 export async function getTourGlobalStats(): Promise<TourGlobalStats> {
+  return fetchTourGlobalStatsCached();
+}
+async function getTourGlobalStatsImpl(): Promise<TourGlobalStats> {
   const dayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
   const [tournaments, tournamentsToday, participants, todayJoiners, prizeAgg, videos, todayVideoComps] = await Promise.all([
     prisma.tournament.count(),
