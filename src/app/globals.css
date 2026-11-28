@@ -12745,6 +12745,16 @@ html.op-fakefs #header {
 #online_play .ranking_tabs span.comp_hidden {
   display: none !important;
 }
+/* 排行模式隐藏「自定义」筛选 + 速旗/连击/无猜快捷钮（2026-11-28 张老师定「排行
+   模式下应和比赛模式一样隐藏」，关闭排行后再出现）：ranked 是 effect 内闭包变量
+   JSX 够不着，由 syncModeButtons（排行态切换统一广播点）与 reset 的 tabs 重建
+   模板挂 rank_hidden 类，这里 CSS 收口（!important 压 .gicon / .ranking_tabs a
+   的显式 display）。锁定态 rank_locked 仍同时挂在元素上，摘掉 rank_hidden 即原样恢复 */
+#online_play .ranking_tabs a.rank_hidden,
+#online_play .ranking_tabs span.rank_hidden,
+#online_play .gicon.rank_hidden {
+  display: none !important;
+}
 /* 倒计时行：.win_countdown（14px bold）+ 本页 22px 行高对齐成绩行；
    颜色内联注入（绿/黄/玫瑰红色阶），此处只管布局 */
 #online_play .op_comp_countdown {
