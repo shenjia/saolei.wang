@@ -1707,6 +1707,13 @@ export interface TourMyResult {
   /** 各级别补保底局数（气泡「含保底」语境备用，本页未用） */
   filled: Record<string, number>;
   rank: number | null; // 在最新排名中的名次（全量排名内）
+  /** 本人展示信息（2026-11-28 张老师需求：10 名外追加行与榜内行同构——姓名/性别/
+   *  英文名/军衔/旧版称号，取法与 getTourRanking 逐字段同源 dualTitles） */
+  name: string;
+  englishName: string;
+  sex: number;
+  title: string;
+  classic: { name: string; color: string } | null;
 }
 
 /** 我在这场比赛的成绩（详情页「我的成绩」板块）。
@@ -1866,6 +1873,23 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
       rank = null;
     }
   }
+  // 本人展示信息（与 getTourRanking 同源：user 表 + 双体系称号）
+  const me = await prisma.user.findUnique({
+    where: { id: BigInt(uid) },
+    select: { chineseName: true, englishName: true, sex: true, status: true },
+  });
+  const meScoreRow = await prisma.userScores.findUnique({
+    where: { id: BigInt(uid) },
+    select: { expTime: true },
+  });
+  const [meTitle] = await dualTitles([
+    {
+      userId: uid,
+      expTime: meScoreRow?.expTime ?? 0,
+      ranked: me?.status === 0,
+      sex: me?.sex ?? 1,
+    },
+  ]);
   return {
     joined: !!joined,
     videos: myRows.length,
@@ -1874,6 +1898,11 @@ export async function getTourMyResult(compId: number, uid: number): Promise<Tour
     calc: myScore && myScore.calc.length > 0 ? myScore.calc : null,
     filled: myScore?.filled ?? {},
     rank,
+    name: me?.chineseName ?? `UID ${uid}`,
+    englishName: me?.englishName ?? "",
+    sex: me?.sex ?? 1,
+    title: meTitle?.m ?? "",
+    classic: meTitle?.c ?? null,
   };
 }
 

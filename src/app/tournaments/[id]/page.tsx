@@ -420,11 +420,22 @@ export default async function CompetitionDetailPage({
                     </li>
                   );
                 })}
-                {/* 10 名外：紧跟榜单追加「我」的一行，名次绿色、成绩同款 hover 计算气泡 */}
+                {/* 10 名外：紧跟榜单追加本人一行（2026-11-28 张老师定：不再写死「我」，
+                    与榜内行同构——姓名+性别+玩家名气泡/个人页链接+军衔徽章），名次绿色、
+                    成绩同款 hover 计算气泡 */}
                 {myRankOutside && (
                   <li className="comp_rank_row comp_rank_mine_outside">
                     <span className="comp_rank_no mine">{myRankOutside.rank ?? "—"}</span>
-                    <span className="comp_rank_name">我</span>
+                    <AvatarCell
+                      id={session!.uid}
+                      name={myRankOutside.name}
+                      englishName={myRankOutside.englishName}
+                      sex={myRankOutside.sex}
+                      gender="small"
+                      link
+                      className="comp_rank_name"
+                    />
+                    <TitleBadge title={myRankOutside.title} classic={myRankOutside.classic} />
                     <b className="comp_rank_time comp_score_tip">
                       {myRankOutside.score === null ? "—" : fmtTourScore(tourMetric, myRankOutside.score)}
                       {myRankOutside.calc && myRankOutside.calc.length > 0 && (
