@@ -497,7 +497,7 @@ async function loadTourScoreInput(cid: bigint) {
   });
   if (!comp) return null;
   const rows = await prisma.$queryRawUnsafe<TourScoreInputRow[]>(
-    "SELECT v.id, v.user, v.level, v.create_time AS createTime FROM video v FORCE INDEX (video_competition_id_create_time_idx) WHERE v.competition_id = ? AND v.status <> 0",
+    `SELECT v.id, v.user, v.level, v.create_time AS createTime FROM video v FORCE INDEX (video_competition_id_create_time_idx) WHERE v.competition_id = ? AND v.status <> 0`,
     cid
   );
   // 窗口赛（windowHours>0 且存在个人会话记录）按玩家各自的会话窗口收录像。

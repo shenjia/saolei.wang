@@ -1719,6 +1719,22 @@ function videoStageCond(stage: FeedStage): string {
   }
 }
 
+/** 首页发现流「先截窗口再去重」（2026-11-28 张老师定 A 方案）。
+ *  原实现每 80s 为取首页 18 条把 34 万行全表排序（EXPLAIN ANALYZE：全表 NOT IN 探测 1.8s
+ *  + (user,level,create_time) 排序 1.1s），生产高峰单条 8–12s、最大 37s。
+ *  正确性地基（生产 M=200/1000/5000/20000 四档实测 仅一侧有=0）：
+ *    在「最近 M 行」内算配额去重 ≡ 全量去重结果 ∩ 最近 M 行
+ *  ——窗口内某行的 rn 只取决于比它更新的同组行，而那些行必然也在窗口里。
+ *  所以只要去重结果的第 (offset+limit) 条落在窗口内，本页返回就与全量完全一致。
+ *  判法：LIMIT 多取 1 行哨兵——取到第 need 条即覆盖；取不到时分不清「窗口太短」还是
+ *  「本页恰是末页」，一律按可能太短处理：直接回落全量（= 原实现，必正确）。
+ *  成本结构（本地实测取最近 N 行的代价）：N≤2000 → 1–3ms（索引倒序扫够数即停）；
+ *  N=4000 起跳到 263ms+（断崖）。故窗口**恒取 2000 行这一档**——能覆盖就零成本命中，
+ *  覆盖不了（深页/稀疏筛选）直接全量，不落在「付大代价却省不多」的坏区间。
+ *  2000 行窗口约产出 470 条去重结果 ≈ 覆盖前 ~23 页，即绝大多数真实流量。
+ *  ⚠️ 仅 fetchFeedDedupIds（取每页 id）用窗口；总数 fetchFeedDedupCount 必须全量，不可截断。 */
+const FEED_WINDOW_ROWS = 2000;
+
 const fetchFeedDedupIdsImpl = async (
   level: VideoLevel | "all",
   nf: boolean,
@@ -1737,24 +1753,38 @@ const fetchFeedDedupIdsImpl = async (
   const viJoin = needsVi ? ` JOIN video_info vi ON vi.id = v.id${nf ? " AND vi.noflag = 1" : ""}` : "";
   const stCond = stage !== "" ? videoStageCond(stage) : "";
   const quota = FEED_USER_LEVEL_QUOTA;
-  // 2026-10-23：status 过滤放宽 <>0（待审放行进首页流，屏蔽仍挡）；2026-11-25 起
-  // 待审破纪录盘由 record_pending 进纪录盘集合直通，其余待审盘照常走配额分支
-  const rows = await prisma.$queryRawUnsafe<{ id: bigint }[]>(`
-    SELECT f.id FROM (
-      SELECT q.id, q.create_time FROM (
-        SELECT v.id AS id, v.create_time AS create_time,
-               ROW_NUMBER() OVER (PARTITION BY v.user, v.level ORDER BY v.create_time DESC, v.id DESC) AS rn
-        FROM video v${viJoin}
-        WHERE v.status <> ${VIDEO_STATUS.BANNED}${lvCond}${stCond} AND v.id NOT IN (${PB_VIDEO_IDS_SQL})
-      ) q WHERE q.rn <= ${quota}
-      UNION ALL
-      SELECT v.id, v.create_time FROM video v${viJoin}
-      WHERE v.status <> ${VIDEO_STATUS.BANNED}${lvCond}${stCond} AND v.id IN (${PB_VIDEO_IDS_SQL})
-    ) f
-    ORDER BY f.create_time DESC, f.id DESC
-    LIMIT ${limit} OFFSET ${(page - 1) * base}
-  `);
-  return rows.map((r) => N(r.id));
+  const offset = (page - 1) * base;
+  const run = async (windowRows: number | null): Promise<{ id: bigint }[]> => {
+    // 子查询别名仍为 v —— viJoin / lvCond / stCond / 纪录盘子查询一字不改
+    const fromVideo = windowRows === null
+      ? "video v"
+      : `(SELECT * FROM video ORDER BY create_time DESC, id DESC LIMIT ${windowRows}) v`;
+    return prisma.$queryRawUnsafe<{ id: bigint }[]>(`
+      SELECT f.id FROM (
+        SELECT q.id, q.create_time FROM (
+          SELECT v.id AS id, v.create_time AS create_time,
+                 ROW_NUMBER() OVER (PARTITION BY v.user, v.level ORDER BY v.create_time DESC, v.id DESC) AS rn
+          FROM ${fromVideo}${viJoin}
+          WHERE v.status <> ${VIDEO_STATUS.BANNED}${lvCond}${stCond} AND v.id NOT IN (${PB_VIDEO_IDS_SQL})
+        ) q WHERE q.rn <= ${quota}
+        UNION ALL
+        SELECT v.id, v.create_time FROM ${fromVideo}${viJoin}
+        WHERE v.status <> ${VIDEO_STATUS.BANNED}${lvCond}${stCond} AND v.id IN (${PB_VIDEO_IDS_SQL})
+      ) f
+      ORDER BY f.create_time DESC, f.id DESC
+      LIMIT ${limit + 1} OFFSET ${offset}
+    `);
+  };
+  const toIds = (rows: { id: bigint }[]) => rows.slice(0, limit).map((r) => N(r.id));
+  // 哨兵：多取 1 行。窗口版取满 limit+1 条 = 窗口足够覆盖本页（且后面还有）；
+  // 取不满 = 分不清窗口太短还是本页即末页 → 回落全量拿真值（末页/深页 = 原行为，不劣化）
+  // 先验剪枝：窗口 M 行最多产出 M 条去重结果（每条至少占 1 行），need > M 必然取不到，
+  // 不白跑窗口直接全量（否则深页多付一次 ~70ms，本地实测慢 22–24%）。
+  if (offset + limit + 1 <= FEED_WINDOW_ROWS) {
+    const rows = await run(FEED_WINDOW_ROWS);
+    if (rows.length > limit) return toIds(rows);
+  }
+  return toIds(await run(null));
 };
 // 2026-11-09 登录态实时化：salt 进键（访客 "" = 原键空间）；2026-11-25 纪录盘集合
 // 并入待审 record_pending（SQL 口径变更），键升 v5 避免部署后命中旧缓存结果
