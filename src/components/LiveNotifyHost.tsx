@@ -79,6 +79,17 @@ function isSelfPlaying(): boolean {
   return !ended;
 }
 
+/* 「我此刻正在旁观谁」（2026-11-28 张老师报「旁观 A 时还弹 A 正在练习」）：
+   原 watchingUidNow 的路径匹配只认旧路由 /live/，旁观页改名 /watch/ 后恒返回
+   0 → 下方 s.uid !== watchingUid 的过滤形同虚设。现两种前缀都认（/live/ 是
+   301 跳转前的瞬时态及站内可能残留的旧链接）；非旁观页返回 0（＝不过滤）。
+   提成模块级纯函数，供轮询过滤、pump 入场闸、路由切换即时收卡三处共用同一
+   判定，禁止单边漂移 */
+function watchingUidOf(pathname: string): number {
+  const m = pathname.match(/^\/(?:watch|live)\/(\d+)/);
+  return m ? Number(m[1]) : 0;
+}
+
 /* 活跃卡片按「 oldest 在上、最新在下」分配固定槽位。轮换退场卡不占槽，
    因而旧顶部向第 4 格离场时，其余卡片与新卡片能同拍向上补位。 */
 function layoutCards(cards: NotifyCard[]): NotifyCard[] {
@@ -175,6 +186,10 @@ export function LiveNotifyHost() {
      避免补位卡与渐隐卡重叠；轮换退场卡例外，立刻让出新底部槽位。 */
   const pump = useCallback(() => {
     if (isSelfPlaying()) return;
+    /* 入场闸（2026-11-28）：正在旁观的玩家不弹——过滤只发生在 60s 轮询拍，
+       轮询间隔内入队的残留（或路由刚切换）不能在这一拍被放出来 */
+    const watching = watchingUidOf(location.pathname);
+    if (watching) queueRef.current = queueRef.current.filter((q) => q.uid !== watching);
     const occupied = cardsRef.current.filter((c) => !c.leaving || !c.cycle).length;
     const capacity = MAX_VISIBLE - occupied;
     if (capacity <= 0 || !queueRef.current.length) return;
@@ -260,10 +275,7 @@ export function LiveNotifyHost() {
         return until > Date.now();
       } catch { return false; }
     };
-    const watchingUidNow = (): number => {
-      const m = location.pathname.match(/^\/live\/(\d+)/);
-      return m ? Number(m[1]) : 0;
-    };
+    const watchingUidNow = (): number => watchingUidOf(location.pathname);
     const poll = async () => {
       const watchingUid = watchingUidNow();
       try {
@@ -295,6 +307,26 @@ export function LiveNotifyHost() {
     const timer = window.setInterval(poll, POLL_MS);
     return () => { alive = false; window.clearInterval(timer); };
   }, [pump]);
+
+  /* 站内切到旁观页（同标签软导航进 /watch/<uid>）时立即收掉被旁观玩家的卡片与
+     队列项——不能等下一个 60s 轮询拍。popstate 覆盖浏览器前进/后退；App Router
+     的 <Link> 软导航不触发 popstate，用 1s 轻量轮询 pathname 兜底（仅比对字符串，
+     未变化即 return，开销可忽略）。 */
+  useEffect(() => {
+    let last = location.pathname;
+    const sweep = () => {
+      if (location.pathname === last) return;
+      last = location.pathname;
+      const w = watchingUidOf(location.pathname);
+      if (!w) return;
+      queueRef.current = queueRef.current.filter((q) => q.uid !== w);
+      setQueueLen(queueRef.current.length);
+      if (cardsRef.current.some((c) => c.streamer.uid === w && !c.leaving)) dismiss(w);
+    };
+    window.addEventListener("popstate", sweep);
+    const t = window.setInterval(sweep, 1000);
+    return () => { window.removeEventListener("popstate", sweep); window.clearInterval(t); };
+  }, [dismiss]);
 
   /* 提示音预取；同一批多张只响一次，后续从队列补入的新主播再响。 */
   useEffect(() => { sfxPrefetch([NOTIFY_SND]); }, []);
